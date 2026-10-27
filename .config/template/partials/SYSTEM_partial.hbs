@@ -1,0 +1,122 @@
+{{!
+/**
+  ******************************************************************************
+  * @file    SYSTEM_partial.hbs
+  * @brief   Partial to generate the code linked to SYSTEM configuration
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+~}}
+{{#if (eq fct 'system_check_isr_model')}}
+{{! Check the model applied for IRQ handler code generation                        ~}}
+{{!  > SYSTEM fct='system_check_isr_model'                                         ~}}
+{{! return the value of the flag 'isr_handler' inside a variable @root.isr_handler ~}}
+{{!                                                                                ~}}
+{{assign "jsonFilter" (JSONparse '{"cgroup": "STM32CubeMX2 Config", "csub": "System"}')~}}
+{{assign 'system_ctxt' (@root.SWConfigurationAPI.getSwInstancesConfiguration @root.jsonFilter)~}}
+{{!log 'SYSTEM_partial: system_ctxt=' (toJSON @root.system_ctxt)~}}
+{{assign 'isr_handler' @root.system_ctxt.[0].code_generation.isr_handler~}}
+{{log 'SYSTEM_partial: isr_handler=' @root.isr_handler~}}
+{{else if (eq fct 'system_check_ll_optim')}}
+{{! Check if user wants to optimize the LL code                        ~}}
+{{!  > SYSTEM fct='system_check_ll_optim'                                         ~}}
+{{! return the value of the flag 'optim_enable' inside a variable @root.optim_enable ~}}
+{{!                                                                                ~}}
+{{assign "jsonFilter" (JSONparse '{"cgroup": "STM32CubeMX2 Config", "csub": "System"}')~}}
+{{assign 'system_ctxt' (@root.SWConfigurationAPI.getSwInstancesConfiguration @root.jsonFilter)~}}
+{{!log 'SYSTEM_partial: system_ctxt=' (toJSON @root.system_ctxt)~}}
+{{assign 'optim_enable' @root.system_ctxt.[0].code_generation.optim_enable~}}
+{{log 'SYSTEM_partial: optim_enable=' @root.optim_enable~}}
+{{else if (eq fct 'gpio_pwr_activation')}}
+{{! Generate PWR clock activation for GPIOx pinx                                                ~}}
+{{!  > SYSTEM fct='gpio_pwr_activation' port=port pin=pin layer=layer called_by=called_by       ~}}
+{{!  e.g., > SYSTEM fct='gpio_pwr_activation' port=M pin=1 layer='HAL' called_by='gpio_partial' ~}}
+{{!                                                                                             ~}}
+{{! clock_activation != HAL_CLK_ENABLE_PERIPH_PWR_SYSTEM: pwr clock need to be configured inside application ~}}
+{{!log 'SYSTEM_partial.hbs (fct=gpio_pwr_activation): core_ctxt=' @root.core_ctxt 'port=' port 'pin=' pin~}}
+{{else if (eq fct 'system_timeout_variable')}}
+  {{!~ Generate a local variable to manage the LL SysTick and Software timeout                       ~}}
+  {{!~  SYSTEM fct='system_timeout_variable' timing=100                                              ~}}
+  {{!~  timing: value in ms (if not defined, the local variable is not initialized)                ~}}
+  {{~assign 'timeout_strategy' (@root.EnvVarAPI.getVariableValue 'SYSTEM_PROJECT_LL_TIMEOUT_MECHANISM')~}}
+  {{#if (gt @root.timeout_strategy 0)}}
+#if defined (USE_LL_TIMEOUT) && (USE_LL_TIMEOUT != 0)
+    {{#if (eq @root.timeout_strategy 1)}}
+  __IO uint32_t timeout_ms{{#if timing}} = {{timing}}{{/if}};
+    {{else}}
+      {{#if timing}}
+  /*
+    18U is the number of required instruction cycles for the below loop statement.
+    The timeout value is expressed in ms.
+  */
+      {{/if}}
+  __IO uint32_t timeout_ms{{#if timing}} = {{timing}} * (SystemCoreClock / 18U / 1000U){{/if}};
+    {{/if}}
+#endif /* USE_LL_TIMEOUT */
+
+  {{/if}}
+{{else if (eq fct 'system_timeout_loop')}}
+  {{!~ Generate the timeout loop for while loop in generated code                                             ~}}
+  {{!~  > SYSTEM fct='system_timeout_loop' timing=100 return_if_failed='NULL'                                 ~}}
+  {{!~  timing: value in ms                                                                                   ~}}
+  {{!~          (if set to 'undefined', local variable is set, as done globally at the declaration )          ~}}
+  {{!~  return_if_failed: return value in case of failed (if undefined, by default 'SYSTEM_PERIPHERAL_ERROR') ~}}
+  {{~assign 'timeout_strategy' (@root.EnvVarAPI.getVariableValue 'SYSTEM_PROJECT_LL_TIMEOUT_MECHANISM')}}
+  {{#if (eq @root.timeout_strategy 0)}}
+  /* Infinite loop */
+  do
+  {
+  }
+{{else if (eq @root.timeout_strategy 1)}}
+  /* LL SysTick timeout */
+    {{#unless (eq timing 'undefined')}}
+#if defined (USE_LL_TIMEOUT) && (USE_LL_TIMEOUT == 1)
+  timeout_ms = {{timing}};
+#endif /* USE_LL_TIMEOUT */
+    {{/unless}}
+  do
+  {
+#if defined (USE_LL_TIMEOUT) && (USE_LL_TIMEOUT == 1)
+    if (SysTick_IsActiveCounterFlag() != 0U)
+    {
+      if (timeout_ms-- == 0U)
+      {
+        return {{#if (or return_if_failed (eq return_if_failed ''))}}{{return_if_failed}}{{else}}SYSTEM_PERIPHERAL_ERROR{{/if}};
+      }
+    }
+#endif /* USE_LL_TIMEOUT */
+  }
+{{else if (eq @root.timeout_strategy 2)}}
+  /* LL software timeout */
+    {{#unless (eq timing 'undefined')}}
+#if defined (USE_LL_TIMEOUT) && (USE_LL_TIMEOUT == 2)
+  /*
+    18U is the number of required instruction cycles for the below loop statement.
+    The timeout value is expressed in ms.
+  */
+  timeout_ms = {{timing}} * (SystemCoreClock / 18U / 1000U);
+#endif /* USE_LL_TIMEOUT */
+    {{/unless}}
+  do
+  {
+#if defined (USE_LL_TIMEOUT) && (USE_LL_TIMEOUT == 2)
+    if (timeout_ms-- == 0U)
+    {
+      return {{#if (or return_if_failed (eq return_if_failed ''))}}{{return_if_failed}}{{else}}SYSTEM_PERIPHERAL_ERROR{{/if}};
+    }
+#endif /* USE_LL_TIMEOUT */
+  }
+{{/if}}
+{{else}}
+#warning "Function {{fct}} not present in partial SYSTEM_partial.hbs"
+
+{{/if}}

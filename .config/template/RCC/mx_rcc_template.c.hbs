@@ -1,0 +1,500 @@
+{{!--
+  ******************************************************************************
+  * @file           : mx_rcc_template.c.hbs
+  * @brief          : STM32 RCC program body
+  ******************************************************************************
+
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  ~--}}
+{{#helper_common_beautifier}}
+{{! Retrieving configuration and user settings ~}}
+{{assign "codegen_ctxt" (helper_common_get_codegen_context 'RCC' (get '') @root.EnvVarAPI @root.peripheralsResourceManagerAPI @root.SWConfigurationAPI)~}}
+{{log "RCC template codegen_ctxt:" @root.codegen_ctxt~}}
+{{assign 'strategy' @root.codegen_ctxt.strategy~}}
+{{assign 'current_resource' @root.codegen_ctxt.current_resource~}}
+{{assign 'rcc_ctx' @root.codegen_ctxt.instances.[0].config~}}
+{{~helper_rcc_init_codegen @root}}
+{{~assign 'current_layer' @root.rcc_ctx.info.layer ~}}
+{{~assign 'all_resources' (helper_rcc_get_all_resources) ~}}
+{{~assign 'all_ppp_clock_configs' (helper_rcc_get_all_perifs_clock_config @root.all_resources) ~}}
+{{~assign 'system_config' (helper_rcc_get_system_config @root.rcc_ctx) ~}}
+{{~assign 'used_oscillators' (helper_rcc_get_used_osc @root.system_config @root.all_ppp_clock_configs) ~}}
+{{~assign 'rcc_root_fct_name' (helper_common_get_generated_function_name 'RCC' @root.current_layer)~}}
+{{! LL optimization initialization ~}}
+{{> SYSTEM fct='system_check_ll_optim'~}}
+{{~assign 'do_rcc_ll_optim' @root.optim_enable~}}{{! LL optimization for RCC is enabled (if enabled in configuration)~}}
+{{~assign 'lut_table'   (helper_rcc_get_lut_table)~}}
+{{~helper_common_initialize_ll_code @root.optim_enable @root.lut_table "undefined"~}}
+{{~assign 'MCU' @root.SWProjectAPI.getMCU ~}}
+{{~assign 'only_ll' (helper_common_check_if_only_ll @root.EnvVarAPI)~}}
+{{helper_breakpoint 10 @root}}
+/**
+  ******************************************************************************
+  * @file           : mx_rcc.c
+  * @brief          : STM32 RCC program body
+{{> LICENSE}}
+
+
+/* Includes ------------------------------------------------------------------*/
+#include "mx_rcc.h"
+
+/* Private typedef -----------------------------------------------------------*/
+{{#unless (helper_rcc_is_central @root.rcc_ctx)}}
+
+typedef struct
+{
+  {{#each used_oscillators}}
+  uint32_t {{lowercase this}}: 4U;
+  {{/each~}}
+
+  {{#if system_config.pll_used.PLL1}}
+  uint32_t pll1: 1U;
+  uint32_t pll1p: 2U; /* clk src of up to 2 peripherals + sys clk */
+  uint32_t pll1q: 4U; /* clk src of up to 15 peripherals */
+  uint32_t pll1r: 5U; /* clk src of up to 18 peripherals */
+  {{/if~}}
+
+  {{#if system_config.pll_used.PLL2}}
+  uint32_t pll2: 1U;
+  uint32_t pll2p: 4U; /* clk src of up to 8 peripherals */
+  uint32_t pll2q: 5U; /* clk src of up to 20 peripherals */
+  uint32_t pll2r: 3U; /* clk src of up to 4 peripherals */
+  {{/if~}}
+} mx_rcc_status_t;
+
+{{/unless}}
+/* Private define ------------------------------------------------------------*/
+/* Private macro -------------------------------------------------------------*/
+{{#unless (helper_rcc_is_central @root.rcc_ctx)}}
+#define RCC_CONSUME_RESOURCE(block, nb_resources)     (RCC_Status.block += (nb_resources))
+#define RCC_RELEASE_RESOURCE(block)                   ((RCC_Status.block > 0U) ? (RCC_Status.block--) : \
+                                                       (RCC_Status.block = 0U))
+#define RCC_IS_RESOURCE_FREE(block)                   (RCC_Status.block == 0U)
+#define RCC_IS_RESOURCE_TAKEN(block)                  (RCC_Status.block > 0U)
+
+{{/unless~}}
+
+/* Private variables ---------------------------------------------------------*/
+{{#unless (helper_rcc_is_central @root.rcc_ctx)}}
+static mx_rcc_status_t RCC_Status;
+
+{{/unless~}}
+
+{{#if (eq @root.current_layer 'HAL')}}
+{{> GPIO_HAL fct='gpio_exti_get_variables' resource=@root.current_resource~}}
+{{else}}
+{{> SYSTEM fct='system_timeout_variable'}}
+{{/if}}
+/* Private functions prototype------------------------------------------------*/
+
+/******************************************************************************/
+/* Exported functions for RCC in {{@root.current_layer}} layer */
+/******************************************************************************/
+
+{{! ************************************************************************* }}
+{{! Generation of initialization function (mx_rcc_hal_init or mx_rcc_ll_init) }}
+{{! *************************************************************************~}}
+{{#with @root.system_config}}
+/**
+  * Configure the system core clock only and activate it using the {{@root.current_layer}} RCC unitary APIs (footprint optimization)
+  *         The system Clock is configured as follow :
+  *            System Clock source            = {{clock_source.name}}
+  *            SYSCLK(Hz)                     = {{frequencies.system}}
+  *            HCLK(Hz)                       = {{frequencies.ahb}}
+  *            AHB Prescaler                  = {{prescaler.ahb}}
+  *            APB1 Prescaler                 = {{prescaler.apb1}}
+  *            APB2 Prescaler                 = {{prescaler.apb2}}
+  *            APB3 Prescaler                 = {{prescaler.apb3}}
+  {{#if clock_source.PLLCLK}}
+    {{#with pll_used.PLL1.config}}
+  *            PLL1M                          = {{m}}
+  *            PLL1N                          = {{n}}
+  *            PLL1P                          = {{p}}
+  *            PLL1Q                          = {{q}}
+  *            PLL1R                          = {{r}}
+  *            PLL1FracN                      = {{fracn}}
+    {{/with}}
+  {{/if}}
+  *            Flash Latency(WS)              = {{flash_latency}}
+  */
+{{/with}}
+system_status_t {{@root.rcc_root_fct_name}}_init(void)
+{
+{{>RCC_LOCAL fct='generate_set_voltage_scaling'}}
+
+{{~#with @root.system_config.clock_source}}
+  {{#if HSI}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hsi' direct=true nb_resources=1}}
+  {{/if~}}
+
+  {{#if HSE}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hse' direct=true nb_resources=1}}
+  {{/if~}}
+
+  {{#if PLLCLK}}
+{{>RCC_LOCAL fct='generate_pll_config_enable_with_checks' pll_info=@root.system_config.pll_used.PLL1 direct=true}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' pll_idx ='1' pll_output='P' direct=true}}
+  {{/if~}}
+{{/with}}
+
+{{>RCC_LOCAL fct='generate_set_system_clock_sequence'}}
+{{>RCC_LOCAL fct='generate_init_systick'}}
+{{>RCC_LOCAL fct='generate_update_core_clock'}}
+{{>RCC_LOCAL fct='generate_config_clock_outputs'}}
+{{>RCC_LOCAL fct='generate_enable_css'}}
+{{>RCC_LOCAL fct='generate_configure_enable_it'}}
+{{>RCC_LOCAL fct='generate_enable_in_stop_mode'}}
+{{>RCC_LOCAL fct='generate_debug_mode_config'}}
+
+  return SYSTEM_OK;
+}
+
+{{! ******************************************************************************** }}
+{{! Generation of de-initialization function (mx_rcc_hal_deinit or mx_rcc_ll_deinit) }}
+{{! ********************************************************************************~}}
+void {{@root.rcc_root_fct_name}}_deinit(void)
+{
+{{#unless (helper_rcc_is_central @root.rcc_ctx)}}
+  RCC_Status = (mx_rcc_status_t){0};
+
+{{/unless}}
+{{#if (eq @root.current_layer 'HAL')}}
+  {{#if (helper_rcc_is_feature_enabled "use_hal_rcc_reset_rtc_domain")}}
+{{>PWR_HAL fct='generate_write_protection_disable'}}
+  {{/if}}
+  HAL_RCC_Reset();
+  {{#if (helper_rcc_is_feature_enabled "use_hal_rcc_reset_rtc_domain")}}
+{{>PWR_HAL fct='generate_write_protection_enable'}}
+  {{/if}}
+{{else}}
+  {{! LL Layer }}
+  {{~assign 'do_rcc_ll_optim' false}}{{! LL optimization for RCC is disabled }}
+
+  LL_RCC_WRITE_REG(IER, RCC_IER_Rst); /* Disable all interrupts */
+
+  {{#if (helper_rcc_is_feature_enabled "use_hal_rcc_reset_periph_clock_management")}}
+  /* Reset peripheral clock enable */
+    {{~assign 'bus_list' (helper_rcc_get_available_buses)}}
+  STM32_CLEAR_BIT(RCC->CFGR2, ({{#each @root.bus_list}}RCC_CFGR2_{{this}}DIS {{#unless @last}}| {{/unless}}{{/each}}));
+
+  LL_RCC_WRITE_REG(AHB1ENR, RCC_AHB1ENR_Rst);
+  LL_RCC_WRITE_REG(AHB2ENR, RCC_AHB2ENR_Rst);
+  LL_RCC_WRITE_REG(AHB3ENR, RCC_AHB3ENR_Rst);
+  LL_RCC_WRITE_REG(AHB4ENR, RCC_AHB4ENR_Rst);
+
+  LL_RCC_WRITE_REG(APB1LENR, RCC_APB1LENR_Rst);
+  LL_RCC_WRITE_REG(APB1HENR, RCC_APB1HENR_Rst);
+  LL_RCC_WRITE_REG(APB2ENR, RCC_APB2ENR_Rst);
+  LL_RCC_WRITE_REG(APB3ENR, RCC_APB3ENR_Rst);
+
+  LL_RCC_WRITE_REG(AHB1LPENR, RCC_AHB1LPENR_Rst);
+  LL_RCC_WRITE_REG(AHB2LPENR, RCC_AHB2LPENR_Rst);
+  LL_RCC_WRITE_REG(AHB3LPENR, RCC_AHB3LPENR_Rst);
+  LL_RCC_WRITE_REG(AHB4LPENR, RCC_AHB4LPENR_Rst);
+
+  LL_RCC_WRITE_REG(APB1LLPENR, RCC_APB1LLPENR_Rst);
+  LL_RCC_WRITE_REG(APB1HLPENR, RCC_APB1HLPENR_Rst);
+  LL_RCC_WRITE_REG(APB2LPENR, RCC_APB2LPENR_Rst);
+  LL_RCC_WRITE_REG(APB3LPENR, RCC_APB3LPENR_Rst);
+
+  /* Reset peripheral clock source selection */
+  LL_RCC_WRITE_REG(CCIPR1, RCC_CCIPR1_Rst);
+  LL_RCC_WRITE_REG(CCIPR2, RCC_CCIPR2_Rst);
+  LL_RCC_WRITE_REG(CCIPR3, RCC_CCIPR3_Rst);
+  LL_RCC_WRITE_REG(CCIPR4, RCC_CCIPR4_Rst);
+  LL_RCC_WRITE_REG(CCIPR5, RCC_CCIPR5_Rst);
+  {{/if}}
+
+  /* Reset System clock */
+{{>RCC_LOCAL fct='generate_enable_hsi' hsi_divider='1' return=''}}
+
+{{>RCC_LOCAL fct='generate_set_system_clock' default=true return=''}}
+
+  /* Reset all bus dividers */
+  LL_RCC_ConfigBusClock((uint32_t)LL_RCC_HCLK_PRESCALER_1 | (uint32_t)LL_RCC_APB1_PRESCALER_1 |
+                        (uint32_t)LL_RCC_APB2_PRESCALER_1 |
+                        (uint32_t)LL_RCC_APB3_PRESCALER_1);
+
+  SystemCoreClock = HSI_VALUE;
+
+  LL_RCC_SetSystickClockSource(LL_RCC_SYSTICK_CLKSOURCE_HCLKDIV8);
+
+  /* Adapt Systick interrupt period */
+
+  {{#if (helper_rcc_is_feature_enabled "use_hal_rcc_reset_rtc_domain")}}
+{{>PWR_LL fct='generate_write_protection_disable'}}
+  /* Reset backup domain */
+  LL_RCC_ForceRTCDomainReset();
+  LL_RCC_ReleaseRTCDomainReset();
+{{>PWR_LL fct='generate_write_protection_enable'}}
+  {{/if}}
+
+  /* Reset all remaining oscillators not in backup domain */
+  LL_RCC_WRITE_REG(CR, RCC_CR_Rst);
+  LL_RCC_WRITE_REG(CR, RCC_CR_Rst); /* Called a second time to ensure HSE EXT and BYP disabled only when HSE has been disabled */
+
+  LL_RCC_LSI_Disable();
+
+  {{#if (helper_rcc_is_feature_enabled "use_hal_rcc_reset_periph_clock_management")}}
+  /* Reset MCO, RTC prescaler and wake up system clock */
+  LL_RCC_WRITE_REG(CFGR1, RCC_CFGR1_Rst);
+  {{else}}
+  /* Reset MCO, wake up system clock (not RTC prescaler) */
+  uint32_t read_value = LL_RCC_READ_REG(CFGR1);
+  LL_RCC_WRITE_REG(CFGR1, (read_value & RCC_CFGR1_RTCPRE) | (RCC_CFGR1_Rst & ~(RCC_CFGR1_RTCPRE)));
+  {{/if}}
+
+  /* Reset PLLs */
+  LL_RCC_WRITE_REG(PLL1CFGR, RCC_PLL1CFGR_Rst);
+  LL_RCC_WRITE_REG(PLL1DIVR, RCC_PLL1DIVR_Rst);
+  LL_RCC_WRITE_REG(PLL1FRACR, RCC_PLL1FRACR_Rst);
+
+  {{#if helper_rcc_is_pll2_available}}
+  LL_RCC_WRITE_REG(PLL2CFGR, RCC_PLL2CFGR_Rst);
+  LL_RCC_WRITE_REG(PLL2DIVR, RCC_PLL2DIVR_Rst);
+  LL_RCC_WRITE_REG(PLL2FRACR, RCC_PLL2FRACR_Rst);
+  {{/if}}
+
+  /* Clear RCC flags */
+  LL_RCC_ClearFlag(LL_RCC_IT_LSIRDY | LL_RCC_IT_LSERDY | LL_RCC_IT_HSIRDY | LL_RCC_IT_HSERDY | LL_RCC_IT_HSI48RDY | \
+                   LL_RCC_IT_PLL1RDY | LL_RCC_IT_PLL2RDY | LL_RCC_IT_LSECSS | LL_RCC_IT_HSECSS);
+
+  LL_RCC_ClearResetFlags();
+
+  {{~assign 'do_rcc_ll_optim' @root.optim_enable}}{{! LL optimization for RCC is restored }}
+{{/if}}
+}
+
+{{#if (eq @root.current_layer 'HAL')}}
+{{> GPIO_HAL fct='init_resource_independently' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.rcc_root_fct_name type='implementation'}}
+{{else}}
+{{> GPIO_LL fct='init_resource_independently' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.rcc_root_fct_name type='implementation'}}
+{{/if}}
+
+{{! **************************************************************************** }}
+{{! IRQ handler Generation                                                       }}
+{{! ****************************************************************************~}}
+{{> CORTEX fct='generate_irqhandler' type='implementation' component='RCC'}}
+
+{{! **************************************************************************** }}
+{{! EXTI get handle Generation                                                   }}
+{{! ****************************************************************************~}}
+{{#if (eq @root.current_layer 'HAL')}}
+{{> GPIO_HAL fct='gpio_exti_gethandle' resource=@root.current_resource type='implementation'}}
+{{/if}}
+
+{{! **************************************************************************** }}
+{{! Generation of mx_rcc_peripherals_clock_config or mx_rcc_PPP_clock_config     }}
+{{! ****************************************************************************~}}
+{{~#if (helper_rcc_is_controlled_by_periph @root.rcc_ctx)~}}
+
+  {{#each @root.all_resources}}
+    {{#if (helper_rcc_is_clock_config_needed this)}}
+      {{~assign "current_resource" this~}}
+      {{~assign "clock_config" (helper_rcc_get_one_perif_clock_config this)}}
+/**
+  * configure and enable clock for {{@root.current_resource}}
+  */
+system_status_t mx_rcc_{{lowercase @root.current_resource}}_clock_config(void)
+{
+{{>RCC_LOCAL fct='periph_configs' central=false clock_config=@root.clock_config}}
+{{>RCC fct='generate_kernel_clock_with_return' hw_resource=@root.current_resource return='SYSTEM_CLOCK_ERROR'}}
+  return SYSTEM_OK;
+}
+
+/**
+  * Deactivate clock for {{@root.current_resource}}
+  */
+system_status_t mx_rcc_{{lowercase @root.current_resource}}_clock_deactivate(void)
+{
+{{>RCC_LOCAL fct='periph_deactivate' clock_config=@root.clock_config}}
+  return SYSTEM_OK;
+}
+
+    {{/if}}
+  {{/each}}
+{{else}}
+
+/**
+  * configures and activate the clocks used by all the peripherals selected within the project
+  */
+system_status_t mx_rcc_peripherals_clock_config(void)
+{
+{{>RCC_LOCAL fct='periph_configs' central=(helper_rcc_is_central @root.rcc_ctx) clock_config=@root.all_ppp_clock_configs}}
+
+  return SYSTEM_OK;
+}
+{{/if~}}
+
+
+{{! **************************************************************************** }}
+{{! Generation of mx_rcc_[osc]_clock_config or mx_rcc_[osc]_clock_deactivate     }}
+{{! Generation of mx_rcc_[pll]_config or mx_rcc_[pll]_deactivate     }}
+{{! ****************************************************************************~}}
+{{~assign 'do_rcc_ll_optim' false~}}{{! LL optimization for RCC is disabled - following functions are called at runtime ~}}
+
+{{~#unless (helper_rcc_is_central @root.rcc_ctx)}}
+
+  {{#each used_oscillators}}
+    {{~assign 'osc' (lowercase this)}}
+
+/**
+  * configure and enable {{this}} oscillator
+  * @param nb_resources Number of resources which requests to configure the clock
+  */
+system_status_t mx_rcc_{{@root.osc}}_clock_config(uint32_t nb_resources)
+{
+  if (RCC_IS_RESOURCE_FREE({{@root.osc}}))
+  {
+  {{>RCC_LOCAL fct='generate_enable_osc' osc=@root.osc}}
+
+  }
+  RCC_CONSUME_RESOURCE({{@root.osc}}, nb_resources);
+
+  return SYSTEM_OK;
+}
+
+/**
+  * Disable {{this}} oscillator
+  */
+system_status_t mx_rcc_{{@root.osc}}_clock_deactivate(void)
+{
+  RCC_RELEASE_RESOURCE({{@root.osc}});
+
+  if (RCC_IS_RESOURCE_FREE({{@root.osc}}))
+  {
+  {{>RCC_LOCAL fct='generate_disable_osc' osc=@root.osc}}
+  }
+  return SYSTEM_OK;
+}
+
+  {{/each~}}
+
+  {{#eachObject @root.system_config.pll_used}}
+  {{#if (or (include @root.all_ppp_clock_configs value.name) (eq @root.system_config.clock_source.pll_name value.name))}}
+
+/**
+  * Configure PLL{{value.idx}} (all factors {{#each value.factors}}{{value}}, {{/each}}{{#each value.outputs}}{{value}}{{#if (not @last)}}, {{/if}}{{/each}}) and activate it.
+  * Only PLL{{value.idx}} is enabled, not the PLL{{value.idx}} outputs.
+  */
+system_status_t mx_rcc_pll{{value.idx}}_config(void)
+{
+  if (RCC_IS_RESOURCE_FREE(pll{{value.idx}}))
+  {
+    /* Enable the oscillator used as PLL{{value.idx}} input */
+    if (mx_rcc_{{lowercase value.config.src}}_clock_config(1) != SYSTEM_OK)
+    {
+      return SYSTEM_CLOCK_ERROR;
+    }
+
+    /* Configure and enable PLL{{value.idx}} */
+  {{>RCC_LOCAL fct='generate_pll_config_enable' pll_info=value}}
+
+    RCC_CONSUME_RESOURCE(pll{{value.idx}}, 1);
+  }
+
+  return SYSTEM_OK;
+}
+
+/**
+  * Deactivate PLL{{value.idx}}
+  */
+system_status_t mx_rcc_pll{{value.idx}}_deactivate(void)
+{
+  /* Deactivation is possible only if the outputs are free */
+  if (RCC_IS_RESOURCE_FREE(pll{{value.idx}}p)
+      && RCC_IS_RESOURCE_FREE(pll{{value.idx}}q)
+      && RCC_IS_RESOURCE_FREE(pll{{value.idx}}r))
+  {
+    RCC_RELEASE_RESOURCE(pll{{value.idx}});
+  {{>RCC_LOCAL fct='generate_pll_disable' pll_idx=value.idx}}
+
+    /* Deactivate the oscillator used as input of the PLL{{value.idx}} */
+    if (mx_rcc_{{lowercase value.config.src}}_clock_deactivate() != SYSTEM_OK)
+    {
+      return SYSTEM_CLOCK_ERROR;
+    }
+  }
+
+  return SYSTEM_OK;
+}
+    {{#each value.outputs}}
+/**
+  * Activate PLL{{../value.idx}}{{uppercase this}} output
+  * @param nb_resources Number of resources which requests to configure the output
+  */
+system_status_t mx_rcc_pll{{../value.idx}}_output_{{this}}_config(uint32_t nb_resources)
+{
+  if (RCC_IS_RESOURCE_FREE(pll{{../value.idx}}{{this}}))
+  {
+  {{>RCC_LOCAL fct='generate_enable_pll_output' pll_idx=../value.idx pll_output=(uppercase this)}}
+  }
+  RCC_CONSUME_RESOURCE(pll{{../value.idx}}{{this}}, nb_resources);
+
+  return SYSTEM_OK;
+}
+
+/**
+  * Deactivate PLL{{../value.idx}}{{uppercase this}} output
+  */
+system_status_t mx_rcc_pll{{../value.idx}}_output_{{this}}_deactivate(void)
+{
+  RCC_RELEASE_RESOURCE(pll{{../value.idx}}{{this}});
+  if (RCC_IS_RESOURCE_FREE(pll{{../value.idx}}{{this}}))
+  {
+  {{>RCC_LOCAL fct='generate_disable_pll_output' pll_idx=../value.idx pll_output=(uppercase this)}}
+  }
+  return SYSTEM_OK;
+}
+
+    {{/each}}
+  {{/if}}
+  {{/eachObject}}
+{{/unless}}
+
+{{#if @root.rcc_ctx.runtime.crypto_reset}}
+
+/******************************************************************************/
+/* Runtime APIs                                                               */
+/******************************************************************************/
+
+{{! Generate crypto reset function when at least one crypto IP (CCB/PKA/RNG/HASH/SAES) is active ~}}
+  {{~assign 'crypto_reset_info' (helper_rcc_get_active_crypto_ips @root.all_resources)~}}
+  {{#if @root.crypto_reset_info.has_crypto}}
+/**
+  * Disable then reset the active crypto peripherals
+  */
+void mx_rcc_crypto_reset(void)
+{
+    {{#each @root.crypto_reset_info.active_crypto_ips~}}
+      {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_{{helper_rcc_remap_hw_resource this}}_DisableClock();
+      {{else}}
+        {{~assign "periph_bus" (helper_rcc_get_bus_group this)}}
+  LL_{{@root.periph_bus}}_DisableClock(LL_{{@root.periph_bus}}_PERIPH_{{helper_rcc_remap_hw_resource this}});
+      {{/if}}
+    {{/each}}
+
+    {{#each @root.crypto_reset_info.active_crypto_ips~}}
+      {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_{{helper_rcc_remap_hw_resource this}}_Reset();
+      {{else}}
+        {{~assign "periph_bus" (helper_rcc_get_bus_group this)}}
+  LL_{{@root.periph_bus}}_ForceReset(LL_{{@root.periph_bus}}_PERIPH_{{helper_rcc_remap_hw_resource this}});
+  LL_{{@root.periph_bus}}_ReleaseReset(LL_{{@root.periph_bus}}_PERIPH_{{helper_rcc_remap_hw_resource this}});
+      {{/if}}
+    {{/each}}
+}
+
+  {{/if}}
+{{/if}}
+{{/helper_common_beautifier}}

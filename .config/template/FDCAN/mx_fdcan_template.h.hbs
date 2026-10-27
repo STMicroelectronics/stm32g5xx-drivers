@@ -1,0 +1,231 @@
+{{!--
+  ******************************************************************************
+  * @file           : mx_fdcan_template.h.hbs
+  * @brief          : Header for mx_fdcan_template.c.cbs file.
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  ~--}}
+{{#helper_common_beautifier}}
+{{assign "codegen_ctxt" (helper_common_get_codegen_context 'FDCAN' (get '') @root.EnvVarAPI @root.peripheralsResourceManagerAPI @root.SWConfigurationAPI)~}}
+{{log "FDCAN template codegen_ctxt:" @root.codegen_ctxt~}}
+{{assign 'strategy' @root.codegen_ctxt.strategy~}}
+{{assign 'current_resource' @root.codegen_ctxt.current_resource~}}
+{{assign 'file_name' @root.codegen_ctxt.current_resource~}}
+{{assign 'instances' @root.codegen_ctxt.instances~}}
+/**
+  ******************************************************************************
+  * @file           : mx_{{lowercase @root.file_name}}.h
+  * @brief          : Header for mx_{{lowercase @root.file_name}}.c file.
+{{> LICENSE}}
+
+
+/* Define to prevent recursive inclusion -------------------------------------*/
+#ifndef MX_{{@root.file_name}}_H
+#define MX_{{@root.file_name}}_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+/* Includes ------------------------------------------------------------------*/
+{{assign 'only_ll' true~}}
+{{assign 'include_mx_def' false~}}
+{{#each @root.instances~}}
+  {{~assign 'fdcan_cxt' config~}}
+  {{~assign 'current_resource' current_resource~}}
+  {{~assign 'current_layer' @root.fdcan_cxt.info.layer~}}
+  {{#if (eq @root.current_layer 'HAL')}}
+    {{~assign 'only_ll' false~}}
+  {{/if}}
+  {{#with @root.fdcan_cxt.security_privilege}}
+    {{#unless @root.include_mx_def}}
+      {{~assign 'include_mx_def' true~}}
+#include "mx_def.h"
+    {{/unless}}
+  {{/with}}
+{{/each}}
+{{#unless @root.include_mx_def}}
+  {{#if (gt @root.codegen_ctxt.init_model 0)}}
+#include "mx_def.h"
+  {{/if}}
+{{/unless}}
+{{#if @root.only_ll}}
+#include "stm32_ll.h"
+{{else}}
+#include "stm32_hal.h"
+{{/if}}
+
+/* Exported types ------------------------------------------------------------*/
+/* Exported constants --------------------------------------------------------*/
+{{#each @root.instances}}
+{{~assign 'fdcan_cxt' config~}}
+{{~assign 'current_resource' current_resource~}}
+{{~assign 'current_layer' @root.fdcan_cxt.info.layer~}}
+{{#if (eq @root.current_layer 'LL')}}
+#define USE_{{uppercase @root.current_resource}}
+{{/if}}
+{{helper_gpio_generate_aliases @root.pinoutAPI @root.current_resource @root.current_layer~}}
+{{/each}}
+
+/* Exported macros -----------------------------------------------------------*/
+/* Exported variables --------------------------------------------------------*/
+/* Exported functions ------------------------------------------------------- */
+{{assign 'nvic_context' 'undefined'~}}
+{{assign 'ccu_configurable' false~}}
+{{helper_common_initialize_index~}}
+{{assign 'current_index' (helper_common_get_index @root.current_resource)~}}
+{{#each @root.instances}}
+  {{~assign 'fdcan_cxt' config~}}
+  {{~assign 'current_resource' current_resource~}}
+  {{~assign 'current_layer' @root.fdcan_cxt.info.layer~}}
+  {{~assign 'current_index' (helper_common_get_index @root.current_resource)~}}
+  {{~#with @root.fdcan_cxt~}}
+    {{~#if (helper_common_object_has_property additional.interrupts "ccu_interrupts")~}}
+      {{~assign 'hw_version' 'c7amba_fdcan1'~}}
+    {{~else~}}
+      {{~assign 'hw_version' 'c7amba_fdcan2'~}}
+    {{~/if~}}
+    {{~#if (and (eq @root.current_resource 'FDCAN1') (eq @root.hw_version 'c7amba_fdcan1'))~}}
+      {{~assign 'ccu_configurable' true~}}
+    {{~else~}}
+      {{~assign 'ccu_configurable' false~}}
+    {{~/if~}}
+    {{~#if system.nvic.enable_interrupt_line0~}}
+      {{~assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context system.nvic.nvic_config_line0.needs @root.current_resource system.nvic.irq_handler_generation_line0)~}}
+    {{~/if~}}
+    {{~#if system.nvic.enable_interrupt_line1~}}
+      {{~assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context system.nvic.nvic_config_line1.needs @root.current_resource system.nvic.irq_handler_generation_line1)~}}
+    {{~/if~}}
+    {{~#if (and @root.ccu_configurable system.nvic.enable_interrupt_ccu)~}}
+      {{~assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context system.nvic.nvic_config_ccu.needs @root.current_resource system.nvic.irq_handler_generation_ccu)~}}
+    {{~/if~}}
+   {{~assign 'gpio_configs' (helper_gpio_get_allocated_resource_needs @root.pinoutAPI @root.current_resource 'all_pins')~}}
+    {{~#each @root.gpio_configs.list_config_pins~}}
+      {{~#each exti_cfg~}}
+        {{~#if exti_enabled~}}
+          {{~#each config.needs~}}
+            {{~assign 'get_exti_cfg' (@root.ExtiAPI.getNeedById id)~}}
+            {{~#with @root.get_exti_cfg.configuration.basic~}}
+              {{~#if interruption.enable_interruption~}}
+                {{~assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context interruption.nvic.needs 'EXTI' interruption.irq_handler_generation)~}}
+              {{~/if~}}
+            {{~/with~}}
+          {{~/each~}}
+        {{~/if~}}
+      {{~/each~}}
+    {{~/each~}}
+  {{~/with~}}
+/******************************************************************************/
+/* Exported functions for FDCAN in {{@root.current_layer}} layer */
+/******************************************************************************/
+{{assign 'fct_name' (helper_common_get_generated_function_name @root.current_resource @root.current_layer @root.current_index @root.current_function @root.from_where)~}}
+{{assign 'current_index' (helper_common_inc_index @root.current_resource)~}}
+/**
+  * @brief {{@root.fct_name}} init function
+  * This function configures the hardware resources used in this example
+  * @retval pointer to handle or NULL in case of failure
+  */
+{{#if (eq @root.current_layer 'HAL')}}
+hal_fdcan_handle_t *{{@root.fct_name}}_init(void);
+{{else}}
+FDCAN_TypeDef *{{@root.fct_name}}_init(void);
+{{/if}}
+
+/**
+  * @brief  De-initialize {{lowercase @root.current_resource}} instance and return it.
+  */
+void {{@root.fct_name}}_deinit(void);
+
+{{#with @root.fdcan_cxt.security_privilege}}
+{{#if (eq @root.getCurrentEngine.secure 'Non-secure')}}
+/**
+  * @brief Peripheral privilege configuration function
+  * @retval system_status_t
+  */
+system_status_t {{@root.fct_name}}_config_privilege(void);
+{{else}}
+/**
+  * @brief Peripheral security and privilege configuration function
+  * @retval system_status_t
+  */
+system_status_t {{@root.fct_name}}_config_security_privilege(void);
+{{/if}}
+
+{{/with}}
+
+{{#if (eq @root.current_layer 'HAL')}}
+{{assign 'fct_name' (helper_common_get_generated_function_name @root.current_resource @root.current_layer undefined)~}}
+/**
+  * @brief  Get the {{@root.current_resource}} object.
+  * @retval Pointer on the {{@root.current_resource}} Handle
+  */
+hal_fdcan_handle_t *{{@root.fct_name}}_gethandle(void);
+
+{{> GPIO_HAL fct='init_resource_independently' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='prototype'}}
+
+{{> GPIO_HAL fct='gpio_exti_gethandle' resource=@root.current_resource type='prototype'}}
+{{/if}}
+{{/each}}
+
+{{assign 'irq_info_list' (helper_cortex_nvic_get_irqline_info_list @root.NvicAPI @root.nvic_context 'FDCAN')~}}
+{{#each @root.irq_info_list}}
+{{assign 'line_0_index' (concat @root.current_resource '_IT0')~}}
+{{assign 'line_1_index' (concat @root.current_resource '_IT1')~}}
+{{!-- Treat HAL_FDCAN_CCU_IRQHandler alone  --}}
+{{#if (eq line "FDCAN_CAL")}}
+{{!-- Prohibit CCU generation if FDCAN1 instance not used --}}
+{{#if @root.ccu_configurable}}
+{{#if generate_handler}}
+/******************************************************************************/
+/*                             {{description}}         */
+/******************************************************************************/
+void {{line}}_IRQHandler(void);
+
+{{else}}
+/******************************************************************************/
+/*  {{description}} is managed directly in user code.  */
+/*
+void {{line}}_IRQHandler(void);
+  */
+/******************************************************************************/
+{{/if}}
+{{/if}}
+{{else}}
+{{#if generate_handler}}
+/******************************************************************************/
+/*                             {{description}}                             */
+/******************************************************************************/
+{{#if (eq line @root.line_0_index)}}
+void {{line}}_IRQHandler(void);
+{{else if (eq line @root.line_1_index)}}
+void {{line}}_IRQHandler(void);
+{{else}} {{!-- EXTI lines --}}
+void {{line}}_IRQHandler(void);
+{{/if}}
+
+{{else}}
+/******************************************************************************/
+/*  {{description}} is managed directly in user code.                      */
+/*
+void {{line}}_IRQHandler(void);
+  */
+/******************************************************************************/
+{{/if}}
+{{/if}}
+{{/each}}
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* MX_{{@root.file_name}}_H */
+{{/helper_common_beautifier}}

@@ -1,0 +1,109 @@
+{{!--
+  ******************************************************************************
+  * @file           : mx_posenc_template.c.hbs
+  * @brief          : POSENC Peripheral initialization
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  ~--}}
+{{#helper_common_beautifier}}
+{{assign "codegen_ctxt" (helper_common_get_codegen_context 'POSENC' (get '') @root.EnvVarAPI @root.peripheralsResourceManagerAPI @root.SWConfigurationAPI)~}}
+{{log "POSENC template codegen_ctxt:" @root.codegen_ctxt~}}
+{{assign 'current_resource' @root.codegen_ctxt.current_resource~}}
+{{assign 'instances' @root.codegen_ctxt.instances~}}
+{{assign 'dma_resource' @root.codegen_ctxt.dma_resource~}}
+{{> SYSTEM fct='system_check_ll_optim'}}
+/**
+  ******************************************************************************
+  * @file           : mx_{{lowercase @root.current_resource}}.c
+  * @brief          : {{@root.current_resource}} Peripheral initialization
+{{> LICENSE}}
+
+/* Includes ------------------------------------------------------------------*/
+#include "mx_{{lowercase @root.current_resource}}.h"
+{{> RCC fct='include_rcc'}}
+
+/* Private typedef -----------------------------------------------------------*/
+/* Private define ------------------------------------------------------------*/
+/* Private macro -------------------------------------------------------------*/
+/* Private variables ---------------------------------------------------------*/
+/* Private functions prototype------------------------------------------------*/
+/* Exported variables by reference--------------------------------------------*/
+{{assign 'nvic_context' 'undefined'~}}
+{{assign 'nvic_generate_handler' true~}}
+{{#each @root.instances}}
+  {{~assign 'posenc_cxt' config~}}
+  {{~assign 'current_resource' current_resource~}}
+  {{~assign 'current_layer' @root.posenc_cxt.info.layer~}}
+  {{~assign 'current_index' (helper_common_get_index @root.current_resource)~}}
+  {{~log "POSENC template instance:" (toJSON this)~}}
+{{! Initialize the context for LL code optimization ~}}
+{{assign 'lut_table'   (helper_posenc_get_lut_table 'POSENCV1')~}}
+{{helper_common_initialize_ll_code @root.optim_enable @root.lut_table @root.current_resource~}}
+/******************************************************************************/
+/* Exported functions for {{@root.current_resource}} in {{@root.current_layer}} layer */
+/******************************************************************************/
+{{assign 'fct_name' (helper_common_get_generated_function_name @root.current_resource @root.current_layer 0)~}}
+{{!
+    Generation of initialization function used in HAL
+~}}
+  {{#with @root.posenc_cxt}}
+POSENC_TypeDef *{{@root.fct_name}}_init(void)
+{
+{{> RCC fct='generate_peripheral_clock_activation' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_kernel_clock' hw_resource=@root.current_resource sw_resource='POSENC'}}
+
+{{> POSENC_LL fct='init'}}
+
+    {{#with system}}
+      {{#with gpio}}
+  /****************************************************************************/
+  /* Configuration of GPIO                                                    */
+  /****************************************************************************/
+{{> GPIO_LL fct='init_resource' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+      {{/with}}{{!gpio}}
+      {{#with nvic}}
+        {{#if enable_interruption}}
+  {{assign 'found_posenc_interrupt' true~}}
+  /* Enable the interruption for POSENC */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context nvic_config.needs @root.current_resource irq_handler_generation)~}}
+{{#> CORTEX fct='init' layer=@root.current_layer needs=nvic_config.needs}}#warning "Partial LL CORTEX is not present"{{/CORTEX}}
+        {{/if}}
+      {{/with}}
+    {{/with}}
+
+  return {{@root.current_resource}};
+}
+
+{{> GPIO_LL fct='init_resource_independently' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+void {{@root.fct_name}}_deinit(void)
+{
+{{> POSENC_LL fct='deinit'}}
+{{> RCC fct='generate_peripheral_clock_deactivation' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_peripheral_clock_reset' hw_resource=@root.current_resource}}
+{{> RCC fct='kernel_clock_deinit' hw_resource=@root.current_resource}}
+    {{#with system}}
+      {{#with gpio}}
+{{> GPIO_LL fct='deinit_resource' resource=@root.current_resource}}
+      {{/with}}
+      {{#with nvic}}
+        {{#if nvic_config}}
+{{#> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config.needs~}}{{/CORTEX}}
+        {{/if}}
+      {{/with}}
+    {{/with}}
+}
+
+  {{/with}}
+{{> CORTEX fct='generate_irqhandler' type='implementation' component='POSENC'}}
+{{/each~}}{{!instance~}}
+{{/helper_common_beautifier}}

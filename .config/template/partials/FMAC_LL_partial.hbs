@@ -1,0 +1,88 @@
+{{!
+/**
+  * @file Partial used to generate code for FMAC:
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  */
+~}}
+{{!--
+  Partial used for LL FMAC:
+  how to use
+  > FMAC_LL fct='xxxx' with xxxx:
+    * init
+    * deinit
+--}}
+{{!==================== partial function: init ====================~}}
+{{#if (eq fct 'init')}}
+FMAC_TypeDef *{{@root.fct_name}}_init(void)
+{
+{{> RCC fct='generate_peripheral_clock_activation' hw_resource=@root.current_resource ~}}
+{{> RCC fct='generate_kernel_clock' hw_resource=@root.current_resource ~}}
+{{#with basic}}
+  {{helper_common_gen_ll_code "LL_FMAC_SetX1BaseAndSize" buff_x1.base_half_word buff_x1.size_half_word}}
+  {{helper_common_gen_ll_code "LL_FMAC_SetX2BaseAndSize" buff_x2.base_half_word buff_x2.size_half_word}}
+  {{helper_common_gen_ll_code "LL_FMAC_SetYBaseAndSize" buff_y.base_half_word buff_y.size_half_word}}
+{{/with}}
+{{#with system}}
+{{#if dma.enable_dma_write}}
+
+  /* Configure the DMA Write */
+{{#> DMA_LL fct='init' needs=dma.dma_config_write.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/DMA_LL}}
+{{/if}}
+{{#if dma.enable_dma_read}}
+
+  /* Configure the DMA Read */
+{{#> DMA_LL fct='init' needs=dma.dma_config_read.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/DMA_LL}}
+{{/if}}
+{{#if nvic.enable_interruption}}
+
+  /* Enable the Event interruption for FMAC */
+{{assign 'nvic_needs' (helper_common_concatenate_needs nvic.nvic_config.needs @root.nvic_needs)~}}
+{{#> CORTEX fct='init' layer=@root.current_layer needs=nvic.nvic_config.needs}}
+{{/CORTEX}}
+{{/if}}
+{{/with}}
+
+  return {{@root.current_resource}};
+}
+{{!==================== partial function: deinit ====================~}}
+{{else if (eq fct 'deinit')}}
+void {{@root.fct_name}}_deinit(void)
+{
+{{#with system}}
+{{#if nvic.enable_interruption}}
+  /* Disable the Event interruption for {{@root.current_resource}} */
+{{#> CORTEX fct='deinit' layer=@root.current_layer}}
+{{/CORTEX}}
+{{/if}}
+  LL_FMAC_EnableReset({{@root.current_resource}});
+
+{{> RCC fct='generate_peripheral_clock_reset' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_peripheral_clock_deactivation' hw_resource=@root.current_resource}}
+
+{{#if dma.enable_dma_write}}
+
+  /* Disable the DMA Write */
+{{#> DMA_LL fct='deinit' needs=dma.dma_config_write.needs}}
+{{/DMA_LL}}
+{{/if}}
+{{#if dma.enable_dma_read}}
+
+  /* Disable the DMA Read */
+{{#> DMA_LL fct='deinit' needs=dma.dma_config_read.needs}}
+{{/DMA_LL}}
+{{/if}}
+{{/with}}
+}
+{{else}}
+#warning "step {{fct}} in partial FMAC_LL not managed"
+{{/if}}

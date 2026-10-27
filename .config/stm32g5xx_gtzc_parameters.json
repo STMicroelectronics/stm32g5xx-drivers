@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "version": "0.0.1",
+  "componentid": "::Device:STM32CubeMX2 Config:GTZC",
+  "grammarVersion": "3.8",
+  "type": "object",
+  "properties": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "info": {
+          "title": "General information",
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string",
+              "title": "Sw component not implemented",
+              "actions": [
+                {
+                  "type": "disable",
+                  "condition": "true",
+                  "message": "This field is disabled because this software component is not implemented yet."
+                }
+              ],
+              "default": "This driver configuration is not implemented yet."
+            }
+          }
+        }
+      }
+    }
+  }
+}

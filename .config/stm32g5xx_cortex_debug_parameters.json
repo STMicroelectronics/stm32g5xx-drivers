@@ -1,0 +1,1003 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "version": "0.0.1",
+  "componentid": "::Device:STM32CubeMX2 Config:CORTEX DEBUG",
+  "grammarVersion": "3.8.0",
+  "type": "object",
+  "functions": [
+    {
+      "path": ".config/template/helpers/debug_helpers.js",
+      "accessor": "debug"
+    }
+  ],
+  "properties": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "info": {
+          "title": "General information",
+          "type": "object",
+          "properties": {
+            "labels": {
+              "type": "array",
+              "title": "Add a label",
+              "description": "Labels allow to create aliases inside mx_hal_def.h file like '<label>_init', '<label>_deinit' and '<label>_gethandle'. These aliases can be used on application side.",
+              "items": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 32,
+                "unique": "project",
+                "default": "",
+                "actions": [
+                  {
+                    "type": "error",
+                    "condition": "!/^[A-Za-z_][A-Za-z0-9_]*$/.test($value)",
+                    "message": "Name must be a valid C identifier: start with a letter or underscore, and contain only letters, digits, or underscores."
+                  }
+                ]
+              }
+            },
+            "layer": {
+              "title": "Software layer",
+              "type": "string",
+              "oneOf": [
+                {
+                  "title": "HAL",
+                  "const": "HAL"
+                },
+                {
+                  "title": "LL",
+                  "const": "LL"
+                }
+              ],
+              "default": "HAL",
+              "variables": [
+                {
+                  "on": "update-value",
+                  "name": "HAL_CORTEX_PROJECT_USE_HAL",
+                  "condition": "$value === 'HAL'",
+                  "semaphore": true
+                }
+              ]
+            },
+            "init_type": {
+              "title": "Resource initialization code generation",
+              "type": "string",
+              "description": "Pick whether the initialization code should be generated and automatically called at startup.",
+              "oneOf": [
+                {
+                  "title": "Callable",
+                  "const": "called",
+                  "description": "Initialization code is generated and called in peripheral initialization."
+                },
+                {
+                  "title": "Generated",
+                  "const": "enabled",
+                  "description": "Initialization code is generated but not called in peripheral initialization."
+                },
+                {
+                  "title": "Not generated",
+                  "const": "disabled",
+                  "description": "Initialization code is not generated."
+                }
+              ],
+              "variables": [
+                {
+                  "on": "update-value",
+                  "name": "HAL_CORTEX_CORE_ENABLED",
+                  "value": true
+                }
+              ],
+              "default": "called"
+            }
+          }
+        },
+        "basic": {
+          "type": "object",
+          "title": "Main features",
+          "properties": {
+            "mode": {
+              "title": "Mode",
+              "type": "integer",
+              "oneOf": [
+                {
+                  "title": "JTAG (4 pins)",
+                  "description": "JTAG without the JTRST pin.",
+                  "const": 0
+                },
+                {
+                  "title": "JTAG (5 pins)",
+                  "description": "JTAG with the JTRST pin.",
+                  "const": 1
+                },
+                {
+                  "title": "JTAG with trace synchronous (1 bit)",
+                  "description": "JTAG with one parallel trace pin.",
+                  "const": 2,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED0') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "JTAG with trace synchronous (2 bits)",
+                  "description": "JTAG with two parallel trace pins.",
+                  "const": 3,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED1') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "JTAG with trace synchronous (4 bits)",
+                  "description": "JTAG with four parallel trace pins.",
+                  "const": 4,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED3') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "JTAG with trace synchronous (8 bits)",
+                  "description": "JTAG with eight parallel trace pins.",
+                  "const": 5,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED7') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "JTAG with trace synchronous (16 bits)",
+                  "description": "JTAG with sixteen parallel trace pins.",
+                  "const": 6,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED15') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "Single-wire trace asynchronous",
+                  "description": "Serial-wire with serial trace pin.",
+                  "const": 7
+                },
+                {
+                  "title": "Serial-wire",
+                  "description": "Serial-wire protocol.",
+                  "const": 8
+                },
+                {
+                  "title": "Serial-wire trace synchronous (1 bit)",
+                  "description": "Serial-wire with one parallel trace pin.",
+                  "const": 9,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED0') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "Serial-wire trace synchronous (2 bits)",
+                  "description": "Serial-wire with two parallel trace pins.",
+                  "const": 10,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED1') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "Serial-wire trace synchronous (4 bits)",
+                  "description": "Serial-wire with four parallel trace pins.",
+                  "const": 11,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED3') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "Serial-wire trace synchronous (8 bits)",
+                  "description": "Serial-wire with eight parallel trace pins.",
+                  "const": 12,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED7') == true"
+                    }
+                  ]
+                },
+                {
+                  "title": "Serial-wire trace synchronous (16 bits)",
+                  "description": "Serial-wire with sixteen parallel trace pins.",
+                  "const": 13,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED15') == true"
+                    }
+                  ]
+                }
+              ],
+              "default": 8
+            }
+          }
+        },
+        "system": {
+          "type": "object",
+          "title": "System",
+          "properties": {
+            "gpio": {
+              "type": "object",
+              "title": "GPIO",
+              "properties": {
+                "gpio_jtms": {
+                  "type": "object",
+                  "title": "GPIO JTMS",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'JTMS') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'JTMS')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "JTMS",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_jtck": {
+                  "type": "object",
+                  "title": "GPIO JTCK",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'JTCK') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'JTCK')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "JTCK",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_jtdi": {
+                  "type": "object",
+                  "title": "GPIO JTDI",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'JTDI') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'JTDI')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "JTDI",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_jtdo": {
+                  "type": "object",
+                  "title": "GPIO JTDO",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'JTDO') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'JTDO')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "JTDO",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_swdio": {
+                  "type": "object",
+                  "title": "GPIO SWDIO",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'SWDIO') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'SWDIO')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "SWDIO",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_swclk": {
+                  "type": "object",
+                  "title": "GPIO SWCLK",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'SWCLK') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'SWCLK')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "SWCLK",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traceswo": {
+                  "type": "object",
+                  "title": "GPIO TRACESWO",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACESWO') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACESWO')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACESWO",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_njtrst": {
+                  "type": "object",
+                  "title": "GPIO NJTRST",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'NJTRST') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'NJTRST')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "NJTRST",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traceclk": {
+                  "type": "object",
+                  "title": "GPIO TRACECLK",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACECLK') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACECLK')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACECLK",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced0": {
+                  "type": "object",
+                  "title": "GPIO TRACED0",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED0') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED0')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED0",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced1": {
+                  "type": "object",
+                  "title": "GPIO TRACED1",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED1') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED1')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED1",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced2": {
+                  "type": "object",
+                  "title": "GPIO TRACED2",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED2') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED2')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED2",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced3": {
+                  "type": "object",
+                  "title": "GPIO TRACED3",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED3') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED3')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED3",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced4": {
+                  "type": "object",
+                  "title": "GPIO TRACED4",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED4') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED4')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED4",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced5": {
+                  "type": "object",
+                  "title": "GPIO TRACED5",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED5') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED5')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED5",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced6": {
+                  "type": "object",
+                  "title": "GPIO TRACED6",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED6') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED6')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED6",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced7": {
+                  "type": "object",
+                  "title": "GPIO TRACED7",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED7') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED7')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED7",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced8": {
+                  "type": "object",
+                  "title": "GPIO TRACED8",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED8') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED8')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED8",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced9": {
+                  "type": "object",
+                  "title": "GPIO TRACED9",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED9') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED9')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED9",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced10": {
+                  "type": "object",
+                  "title": "GPIO TRACED10",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED10') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED10')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED10",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced11": {
+                  "type": "object",
+                  "title": "GPIO TRACED11",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED11') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED11')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED11",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced12": {
+                  "type": "object",
+                  "title": "GPIO TRACED12",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED12') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED12')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED12",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced13": {
+                  "type": "object",
+                  "title": "GPIO TRACED13",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED13') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED13')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED13",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced14": {
+                  "type": "object",
+                  "title": "GPIO TRACED14",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED14') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED14')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED14",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "gpio_traced15": {
+                  "type": "object",
+                  "title": "GPIO TRACED15",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!($get('pinout.peripheralCanBeMapped', $resource.name, 'TRACED15') == true) || !$debug.helper_cortex_debug_is_signal_used($basic.mode, 'TRACED15')"
+                    }
+                  ],
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.name",
+                  "needs": [
+                    {
+                      "selector": "TRACED15",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

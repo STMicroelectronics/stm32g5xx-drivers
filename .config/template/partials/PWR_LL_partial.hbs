@@ -1,0 +1,702 @@
+{{~log "PWR_LL_partial generation started"~}}
+{{~log "PWR root="@root~}}
+{{~helper_pwr_globalize_API @root~}}
+{{~assign 'pwr_context' (helper_pwr_get_context 'STMicroelectronics::Device:STM32CubeMX2 Config:PWR')~}}
+{{~log "PWR_LL_partial generate_main_supply_config: pwr_context="@root.pwr_context~}}
+{{~assign "ll_pwr_partial_modules_activated" (helper_pwr_add_analog_module (@root.peripheralsResourceManagerAPI.getPeripheralsBoundToSoftwareInstances))~}}
+{{#if (not (inArray @root.ll_pwr_partial_modules_activated 'PWR'))}}
+  {{~assign 'rcc_context' (helper_pwr_get_context 'STMicroelectronics::Device:STM32CubeMX2 Config:RCC')~}}
+  {{~log "PWR_LL_partial generate_main_supply_config: rcc_context="@root.rcc_context~}}
+  {{~assign 'ucpd_context' (helper_pwr_get_context 'STMicroelectronics::Device:STM32CubeMX2 Config:UCPD')~}}
+  {{~log "PWR_LL_partial generate_main_supply_config: ucpd_context="@root.ucpd_context~}}
+{{/if}}
+{{!
+  * @file Partial used to generate LL code for PWR:
+  * @license
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  *
+  * how to use
+  * > PWR_LL fct='xxxx' with xxxx:
+  *   * generate_main_supply_config
+  *   * generate_vos_config
+  *   * generate_write_protection_disable
+  *   * generate_write_protection_enable
+  *   * exported_functions_init
+  *   * exported_functions_deinit
+~}}
+{{!
+############################
+##  exported_variables
+############################
+~}}
+{{#if (eq fct 'generate_main_supply_config')}}
+{{!
+ Generate the PWR LL code to configure the main supply
+~}}
+  {{~log "PWR_LL_partial generate_main_supply_config: supply="@root.pwr_context.additional.main_supply_configuration.mcu_main_supply~}}
+  {{#if @root.pwr_context.additional.main_supply_configuration.mcu_main_supply}}
+  /* Configure the Power Supply source */
+    {{#if (eq @root.pwr_context.additional.main_supply_configuration.mcu_main_supply 'BYPASSED')}}
+  LL_PWR_EnableBypass();
+    {{/if}}
+    {{#if (eq @root.pwr_context.additional.main_supply_configuration.mcu_main_supply 'NOT_BYPASSED')}}
+  /*! Internal regulator set by default on G5 series */
+    {{/if}}
+  {{/if}}
+{{else if (eq fct 'generate_vos_config')~}}
+{{!
+ Generate the PWR LL code to configure the voltage scaling
+~}}
+  {{#if (inArray @root.ll_pwr_partial_modules_activated 'PWR')}}
+  /* Configure the Voltage scaling level */
+  {{helper_common_gen_ll_code 'LL_PWR_SetRegulatorVoltageScaling' (concat 'LL_PWR_REGU_' @root.pwr_context.additional.main_supply_configuration.voltage_scaling)}}
+
+  {{else}}
+  /* Configure the Voltage scaling level */
+  {{helper_common_gen_ll_code 'LL_PWR_SetRegulatorVoltageScaling' (concat 'LL_PWR_REGU_' @root.rcc_context.basic.voltage_scaling)}}
+
+  {{/if}}
+    {{#if (not (eq @root.pwr_context.additional.main_supply_configuration.mcu_main_supply 'BYPASSED'))}}
+  /* Poll on VOS ready and Active VOS ready flag to reach correct voltage */
+  while((LL_PWR_IsActiveFlag_VOS() == 0U) || (LL_PWR_IsActiveFlag_ACTVOS() == 0U));
+    {{else if (eq @root.pwr_context.additional.main_supply_configuration.mcu_main_supply 'BYPASSED')}}
+  /* Poll on SRAM Operation speed until voltage scaling has been reached */
+      {{#if (eq @root.pwr_context.additional.main_supply_configuration.voltage_scaling 'VOLT_SCALE_2')}}
+  while (LL_PWR_GetSRAMOperationSpeed() != LL_PWR_SRAM_LOW_SPEED);
+      {{else}}
+  while (LL_PWR_GetSRAMOperationSpeed() != LL_PWR_SRAM_HIGH_SPEED);
+      {{/if}}
+  {{/if}}
+{{else if (eq fct 'generate_write_protection_disable')}}
+{{!
+ Generate the PWR LL code to disable the RTC/Backup Domain Write protection
+}}
+{{!> PWR_LL fct='generate_write_protection_disable'}}
+  /* Disable RTC Domain Write Protection */
+  LL_PWR_DisableRTCDomainWriteProtection();
+{{else if (eq fct 'generate_write_protection_enable')}}
+{{!
+ Generate the PWR LL code to enable the RTC/Backup Domain Write protection
+}}
+{{!> PWR_LL fct='generate_write_protection_enable'}}
+  /* In order to simplify the code generation and management for the user, the write protection is not enabled by
+     default. In real case application, we advise to enable it once all the necessary configurations are done. */
+  /* Enable RTC Domain Write Protection */
+  /* LL_PWR_EnableRTCDomainWriteProtection(); */
+{{else if (eq fct 'exported_functions_init')}}
+{{!
+    Generation of initialization function used in LL
+}}
+system_status_t {{@root.pwr_root_fct_name}}_init(void)
+{
+  {{#if (length @root.pins_configs)}}
+    {{~assign "wkup_pin_conc_max" (helper_pwr_get_max_wakeup_settings_pin_num @root.pins_configs)~}}
+    {{#if (gt @root.wkup_pin_conc_max 1)}}
+{{! Content to display if length > 1, initialize parameters for wkuppin management~}}
+      {{~assign "wkup_pin_init" (helper_pwr_get_ll_wkup_pin_codegen_init 'G5')~}}
+      {{{@root.wkup_pin_init}}}
+    {{else}}
+{{! nothing to display if length <= 1~}}
+    {{/if}}
+  {{/if}}
+  {{#> RCC fct='generate_peripheral_clock_activation' hw_resource=@root.current_resource}}
+  {{/RCC}}
+  {{#with additional}}
+    {{#if (and (not (eq @root.codegen_ctxt.init_model 1)) (or (eq status_pins_configuration.enable_csleep true)(eq status_pins_configuration.enable_cstop true)(eq status_pins_configuration.enable_srdstop true)(and (eq voltage_detection_configuration.pvd_configuration.enable true)(eq voltage_detection_configuration.pvd_configuration.level_selection '3'))))}}
+  /****************************************************************************/
+  /* GPIO configuration                                                       */
+  /****************************************************************************/
+      {{#> GPIO_LL fct='init_resource' resource=@root.current_resource return_if_failed='SYSTEM_POWER_ERROR' init_model=@root.codegen_ctxt.init_model fct_name=@root.pwr_root_fct_name~}}
+      {{/GPIO_LL}}
+
+    {{/if}}
+    {{#with main_supply_configuration}}
+      {{#if (or stop_voltage_scaling (not (inArray @root.modules_activated 'RCC')))}}
+  /****************************************************************************/
+  /* Main supply configuration                                                */
+  /****************************************************************************/
+        {{#if (not (inArray @root.modules_activated 'RCC'))}}
+          {{#> PWR_LL fct='generate_vos_config'~}}
+          {{/PWR_LL}}
+
+        {{/if}}
+        {{#if stop_voltage_scaling}}
+  /* Stop Voltage scaling configuration */
+  {{helper_common_gen_ll_code  'LL_PWR_SetStopRegulatorVoltageScaling' (concat 'LL_PWR_REGU_STOP_' stop_voltage_scaling)}}
+
+        {{/if}}
+      {{/if}}
+    {{/with}}
+    {{#with independent_supply_configuration}}
+      {{#if (or enable_vddusb_supply (and (not (inArray @root.modules_activated 'ANALOG')) (or (eq analog_io_switch_supply 'VDDA_SUPPLY') (eq analog_io_switch_supply 'BOOSTER_SUPPLY') (eq analog_io_switch_supply 'VDD_SUPPLY'))))}}
+  /****************************************************************************/
+  /* Independent supply configuration                                         */
+  /****************************************************************************/
+        {{#if enable_vddusb_supply}}
+          {{#if (not (or (inArray @root.modules_activated 'USB_DRD_FS.HOST') (inArray @root.modules_activated 'USB_DRD_FS.DEVICE')))}}
+            {{#> PWR_LL fct='generate_peripheral_supply_activation' hw_resource='USB' ~}}
+            {{/PWR_LL}}
+
+          {{/if}}
+        {{/if}}
+        {{#if (and (not (inArray @root.modules_activated 'ANALOG')) (not (eq analog_io_switch_supply 'NONE')))}}
+          {{#> PWR_LL fct='generate_peripheral_supply_activation' hw_resource='ADC'}}
+          {{/PWR_LL}}
+
+        {{/if}}
+      {{/if}}
+    {{/with}}
+    {{#with voltage_detection_configuration}}
+      {{#if pvd_configuration.enable}}
+  /****************************************************************************/
+  /* Configuration of PVD (Programmable Voltage Detector)                     */
+  /****************************************************************************/
+        {{#with pvd_configuration}}
+          {{#if level_selection}}
+            {{~assign 'voltage_reference' (helper_pwr_get_pvdin_or_vdd_level level_selection (@root.peripheralsResourceManagerAPI.getHardwareIpDescription "PWR"))~}}
+            {{!~ Line break because of the helper above}}
+  /* Configure PVD Level */
+  {{helper_common_gen_ll_code 'LL_PWR_SetPVDLevel' (concat 'LL_PWR_PVD_' @root.voltage_reference)}}
+
+          {{/if}}
+  /* Enable PVD */
+  LL_PWR_EnablePVD();
+
+          {{#if (eq enable_exti true)}}
+  /* Configure PVD EXTI Line */
+            {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.pvd_exti_needs}}
+            {{/EXTI}}
+          {{/if}}
+        {{/with}}
+      {{/if}}
+      {{#if avd_configuration.enable}}
+  /****************************************************************************/
+  /* Configuration of AVD (Analog Voltage Detector)                           */
+  /****************************************************************************/
+        {{#with avd_configuration}}
+          {{#if level_selection}}
+  /* Configure AVD Level */
+  {{helper_common_gen_ll_code 'LL_PWR_SetAVDLevel' (concat 'LL_PWR_AVD_VDDA_LEVEL_' level_selection)}}
+
+
+          {{/if}}
+  /* Enable AVD */
+  LL_PWR_EnableAVD();
+
+          {{#if (eq enable_exti true)}}
+  /* Configure AVD EXTI Line */
+            {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.avd_exti_needs}}
+            {{/EXTI}}
+          {{/if}}
+        {{/with}}
+      {{/if}}
+      {{#if (eq enable_exti true)}}
+  /* Configure PVD/AVD EXTI Line */
+        {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.pvd_avd_exti_needs}}
+        {{/EXTI}}
+      {{/if}}
+      {{#if temperature_vbat_monitoring.enable}}
+  /****************************************************************************/
+  /* Configuration of VBAT/Temp monitor                                       */
+  /****************************************************************************/
+        {{#> PWR_LL fct='generate_write_protection_disable'}}
+        {{/PWR_LL}}
+
+  /* Enable VBAT/Temp monitoring */
+  LL_PWR_EnableTemperatureVbatMonitor();
+
+        {{#> PWR_LL fct='generate_write_protection_enable'}}
+        {{/PWR_LL}}
+      {{/if}}
+      {{#if temperature_vdd_monitoring.enable}}
+  /****************************************************************************/
+  /* Configuration of VDD/Temp monitor                                        */
+  /****************************************************************************/
+        {{#> PWR_LL fct='generate_write_protection_disable'}}
+        {{/PWR_LL}}
+
+  /* Enable VDD/Temp monitoring */
+  LL_PWR_EnableTemperatureVddMonitor();
+
+        {{#> PWR_LL fct='generate_write_protection_enable'}}
+        {{/PWR_LL}}
+      {{/if}}
+    {{/with}}
+    {{#with ram_configuration}}
+      {{#if (length @root.sram_configs)}}
+  /****************************************************************************/
+  /* Configuration of RAM retention                                           */
+  /****************************************************************************/
+        {{#each @root.sram_configs}}
+          {{#unless pageStatus}}
+            {{#if fullretention}}
+              {{#if (eq mode 'STANDBY_VBAT')}}
+                {{#> PWR_LL fct='generate_write_protection_disable'}}
+                {{/PWR_LL}}
+
+  /* For {{sram}} in standby mode, retention is enabled */
+  LL_PWR_EnableBackupRegulator();
+
+                {{#> PWR_LL fct='generate_write_protection_enable'}}
+                {{/PWR_LL}}
+              {{else}}
+  /* For {{sram}} in {{lowercase mode}} mode, memory retention is disabled */
+  LL_PWR_DisableMemoryStopRetention(LL_PWR_{{sram}}_{{mode}}_RETENTION);
+              {{/if}}
+
+            {{else}}
+              {{#if pageDefinesStr}}
+                {{#if enabledPagesStr}}
+  /* For {{sram}} in {{lowercase mode}} mode, retention is enabled only for pages {{enabledPagesStr}} */
+                {{else}}
+  /* For {{sram}} in {{lowercase mode}} mode, memory retention is disabled on all pages */
+                {{/if}}
+  uint32_t pages = {{pageDefinesStr}};
+  LL_PWR_Disable{{sram}}PagesStopRetention(pages);
+
+              {{/if}}
+            {{/if}}
+          {{/unless}}
+        {{/each}}
+      {{/if}}
+    {{/with}}
+    {{#if flash_low_power_configuration.enable_flash_low_power_mode}}
+  /****************************************************************************/
+  /* Configuration of FLASH low power mode                                    */
+  /****************************************************************************/
+  LL_PWR_EnableFlashLowPWRMode();
+
+    {{/if}}
+    {{#if nvm_low_power_configuration.enable_nvm_low_power_mode}}
+  /****************************************************************************/
+  /* Configuration of NVM low power mode                                      */
+  /****************************************************************************/
+  LL_PWR_EnableNVMLowPWRMode();
+
+    {{/if}}
+    {{#if battery_configuration.enable_battery_charging}}
+  /****************************************************************************/
+  /* Configuration of the battery charging management                         */
+  /****************************************************************************/
+  /* Configure battery charging resistor value */
+  {{helper_common_gen_ll_code 'LL_PWR_SetBattChargResistor' (concat 'LL_PWR_BATT_CHARG_RESISTOR_' (uppercase battery_configuration.battery_charging_resistor_selection))}}
+
+  /* Enable battery charging */
+  LL_PWR_EnableBatteryCharging();
+
+    {{/if}}
+    {{#with ucpd_configuration}}
+  /****************************************************************************/
+  /* Configuration of the UCPD (USB Type-C and Power Delivery) PWR features   */
+  /****************************************************************************/
+      {{#if (not (inArray @root.modules_activated 'UCPD1'))}}
+        {{#> PWR_LL fct='manage_dead_battery'}}
+        {{/PWR_LL}}
+      {{/if}}
+      {{#if enable_ucpd_config_retention}}
+  /* Enable UCPD configuration retention in Standby mode */
+  {{helper_common_gen_ll_code 'LL_PWR_EnableUCPDRetentionStandbyMode'}}
+
+      {{else}}
+        {{#if (eq @root.PWR_ctx.runtime.mode 'STANDBY_MODE')}}
+  /* This bit must be written to 1 just before entering Standby mode when using UCPD,
+  and it must be written to 0 after exiting the standby mode and before writing any UCPD register */
+        {{/if}}
+  /* Disable UCPD configuration retention in Standby mode */
+  {{helper_common_gen_ll_code 'LL_PWR_DisableUCPDRetentionStandbyMode'}}
+
+      {{/if}}
+    {{/with}}
+    {{~assign 'enabled_pins' ''~}}
+    {{#with wakeup_pins_configuration}}
+      {{~assign 'pull_availability' (helper_pwr_pull_or_source @root.pins_configs)~}}
+      {{~helper_pwr_breakpoint (length @root.pins_configs) @root~}}
+      {{#if (length @root.pins_configs)}}
+  /****************************************************************************/
+  /* Wake-up pins configuration                                               */
+  /****************************************************************************/
+        {{~helper_pwr_breakpoint @root.pull_availability @root}}
+        {{#each @root.pins_configs}}
+          {{#if (gt pinsnum 1)}}
+  {{! Content to display if length > 1, pins concanated management }}
+            {{#if @root.pull_availability}}
+  /* Configuration of selected wake-up pins with pull {{pull}} and {{polarity}} polarity */
+              {{~assign 'pull_core_code' (helper_pwr_get_ll_wkup_pin_codegen_core 'G5' pins (concat 'LL_PWR_WAKEUP_PIN_POLARITY_' polarity) (concat 'LL_PWR_WAKEUP_PIN_PULL_' pull))}}
+            {{else}}
+  /* Configuration of selected wake-up pins with {{source}} and {{polarity}} polarity */
+              {{~assign 'pull_core_code' (helper_pwr_get_ll_wkup_pin_codegen_core 'G5' pins (concat 'LL_PWR_WAKEUP_PIN_POLARITY_' polarity) '' (concat 'LL_PWR_WAKEUP_PIN_SELECTION_' source))}}
+            {{/if~}}
+            {{{@root.pull_core_code}}}
+
+          {{else}}
+  {{! content to display if length <= 1, pins not concanated management }}
+            {{#if @root.pull_availability}}
+  /* Configuration of selected wake-up pins with pull {{pull}} and {{polarity}} polarity */
+  {{helper_common_gen_ll_code 'LL_PWR_SetWakeUpPinPolarity' pins (concat 'LL_PWR_WAKEUP_PIN_POLARITY_' polarity)}}
+  {{helper_common_gen_ll_code 'LL_PWR_SetWakeUpPinPull' pins (concat 'LL_PWR_WAKEUP_PIN_PULL_' pull)}}
+
+            {{else}}
+  /* Configuration of selected wake-up pins with {{source}} and {{polarity}} polarity    */
+  {{helper_common_gen_ll_code 'LL_PWR_SetWakeUpPinPolarity' pins (concat 'LL_PWR_WAKEUP_PIN_POLARITY_' polarity)}}
+  {{helper_common_gen_ll_code 'LL_PWR_SetWakeupPinSelection'pins (concat 'LL_PWR_WAKEUP_PIN_SELECTION_' source)}}
+
+            {{/if}}
+          {{/if}}
+          {{~assign 'enabled_pins' (helper_pwr_concatenate_pins pins @root.enabled_pins)~}}
+        {{/each}}
+        {{~assign 'enabled_pins' (helper_pwr_reorder_pins @root.enabled_pins)~}}
+      {{/if}}
+      {{#if (and wkup_1_configuration.enable wkup_1_configuration.enable_exti)}}
+  /* Configure wake-up pin 1 EXTI line */
+      {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.wkup1_exti_needs~}}
+      {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_2_configuration.enable wkup_2_configuration.enable_exti)}}
+  /* Configure wake-up pin 2 EXTI line */
+      {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.wkup2_exti_needs~}}
+      {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_3_configuration.enable wkup_3_configuration.enable_exti)}}
+  /* Configure wake-up pin 3 EXTI line */
+      {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.wkup3_exti_needs~}}
+      {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_4_configuration.enable wkup_4_configuration.enable_exti)}}
+  /* Configure wake-up pin 4 EXTI line */
+      {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.wkup4_exti_needs~}}
+      {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_5_configuration.enable wkup_5_configuration.enable_exti)}}
+  /* Configure wake-up pin 5 EXTI line */
+      {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.wkup5_exti_needs~}}
+      {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_6_configuration.enable wkup_6_configuration.enable_exti)}}
+  /* Configure wake-up pin 6 EXTI line */
+      {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.wkup6_exti_needs~}}
+      {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_7_configuration.enable wkup_7_configuration.enable_exti)}}
+  /* Configure wake-up pin 7 EXTI line */
+      {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.wkup7_exti_needs~}}
+      {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_8_configuration.enable wkup_8_configuration.enable_exti)}}
+  /* Configure wake-up pin 8 EXTI line */
+      {{#> EXTI fct='exti_get_init' layer=@root.current_layer needs=@root.wkup8_exti_needs~}}
+      {{/EXTI}}
+
+      {{/if}}
+      {{#unless (eq @root.enabled_pins '')}}
+  /****************************************************************************/
+  /* Enable all configured wake-up pins                                       */
+  /****************************************************************************/
+  LL_PWR_EnableWakeUpPin({{@root.enabled_pins}});
+
+      {{/unless}}
+    {{/with}}
+    {{#with io_retention}}
+      {{#if (or (eq all_io true)(eq jtag_io true))}}
+  /****************************************************************************/
+  /* Configuration of I/O retention in standby mode                           */
+  /****************************************************************************/
+      {{/if}}
+      {{#if all_io}}
+  /* Enable I/O retention mode for all I/Os except standby I/Os and PA13, PA14, PA15, PB4 pins */
+  LL_PWR_EnableIORetentionStandbyMode();
+
+      {{/if}}
+      {{#if jtag_io}}
+  /* Enable I/O retention mode for PA13, PA14, PA15, and PB4 */
+  LL_PWR_EnableJTAGIORetentionStandbyMode();
+
+      {{/if}}
+    {{/with}}
+  return SYSTEM_OK;
+  {{/with}}
+}
+
+{{!
+############################
+##  exported_functions_deinit
+############################
+~}}
+{{else if (eq fct 'exported_functions_deinit')}}
+system_status_t {{@root.pwr_root_fct_name}}_deinit(void)
+{
+  {{#> RCC fct='generate_peripheral_clock_deactivation' hw_resource=@root.current_resource}}
+  {{/RCC}}
+  {{#with additional}}
+    {{#if (or (eq status_pins_configuration.enable_csleep true)(eq status_pins_configuration.enable_cstop true)(eq status_pins_configuration.enable_srdstop true)(and (eq voltage_detection_configuration.pvd_configuration.enable true)(eq voltage_detection_configuration.pvd_configuration.level_selection '3')))}}
+  /****************************************************************************/
+  /* Status pin GPIO Deinitialization                                         */
+  /****************************************************************************/
+      {{#> GPIO_LL fct='deinit_resource' resource=@root.current_resource}}
+      {{/GPIO_LL}}
+    {{/if}}
+    {{#unless (eq @root.enabled_pins '')}}
+  /****************************************************************************/
+  /* Disable all configured wake-up pins                                      */
+  /****************************************************************************/
+  LL_PWR_DisableWakeUpPin({{@root.enabled_pins}});
+
+    {{/unless}}
+    {{#with voltage_detection_configuration}}
+      {{#if pvd_configuration.enable}}
+        {{#if (eq pvd_configuration.enable_exti true)}}
+  /* Deinit PVD EXTI Line */
+          {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.pvd_exti_needs}}
+          {{/EXTI}}
+        {{/if}}
+      {{/if}}
+      {{#if avd_configuration.enable}}
+        {{#if (eq avd_configuration.enable_exti true)}}
+  /* Deinit AVD EXTI Line */
+          {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.avd_exti_needs}}
+          {{/EXTI}}
+        {{/if}}
+      {{/if}}
+      {{#if (eq enable_exti true)}}
+  /* Deinit PVD/AVD EXTI Line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.pvd_avd_exti_needs}}
+        {{/EXTI}}
+      {{/if}}
+    {{/with}}
+    {{#with wakeup_pins_configuration}}
+      {{#if (and wkup_1_configuration.enable wkup_1_configuration.enable_exti)}}
+  /* Deinit wake-up 1 EXTI line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.wkup1_exti_needs}}
+        {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_2_configuration.enable wkup_2_configuration.enable_exti)}}
+  /* Deinit wake-up 2 EXTI line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.wkup2_exti_needs}}
+        {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_3_configuration.enable wkup_3_configuration.enable_exti)}}
+  /* Deinit wake-up 3 EXTI line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.wkup3_exti_needs}}
+        {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_4_configuration.enable wkup_4_configuration.enable_exti)}}
+  /* Deinit wake-up 4 EXTI line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.wkup4_exti_needs}}
+        {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_5_configuration.enable wkup_5_configuration.enable_exti)}}
+  /* Deinit wake-up 5 EXTI line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.wkup5_exti_needs}}
+        {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_6_configuration.enable wkup_6_configuration.enable_exti)}}
+  /* Deinit wake-up 6 EXTI line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.wkup6_exti_needs}}
+        {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_7_configuration.enable wkup_7_configuration.enable_exti)}}
+  /* Deinit wake-up 7 EXTI line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.wkup7_exti_needs}}
+        {{/EXTI}}
+
+      {{/if}}
+      {{#if (and wkup_8_configuration.enable wkup_8_configuration.enable_exti)}}
+  /* Deinit wake-up 8 EXTI line */
+        {{#> EXTI fct='exti_get_deinit' layer=@root.current_layer needs=@root.wkup8_exti_needs}}
+        {{/EXTI}}
+
+      {{/if}}
+    {{/with}}
+    {{#with independent_supply_configuration}}
+      {{#if enable_vddusb_supply}}
+        {{#if (not (or (inArray @root.modules_activated 'USB_DRD_FS.HOST') (inArray @root.modules_activated 'USB_DRD_FS.DEVICE')))}}
+          {{#> PWR_LL fct='generate_peripheral_supply_deactivation' hw_resource='USB' ~}}
+          {{/PWR_LL}}
+
+        {{/if}}
+      {{/if}}
+    {{/with}}
+  {{/with}}
+  return SYSTEM_OK;
+}
+
+{{!
+###################################
+##  exported_functions_runtime_apis
+###################################
+~}}
+{{else if (eq fct 'exported_functions_runtime_apis')}}
+  {{#with runtime}}
+    {{#if enable}}
+      {{#if lp_entry}}
+system_status_t mx_pwr_enter_low_power(void)
+{
+        {{#if (or (eq mode 'STOP_MODE')(eq mode 'STOP0_MODE')(eq mode 'STOP1_MODE')(eq mode 'STOP2_MODE')(eq mode 'STOP3_MODE'))}}
+  /* Clear stop flag */
+  LL_PWR_ClearFlag_STOP();
+
+        {{/if}}
+        {{#if (eq mode 'STANDBY_MODE')}}
+  /* Clear standby flag */
+  LL_PWR_ClearFlag_SB();
+
+        {{/if}}
+        {{#if (and (eq mode_entry 'HAL_PWR_LOW_PWR_MODE_WFE')(or (eq mode 'SLEEP_MODE')(eq mode 'STOP_MODE')(eq mode 'STOP0_MODE')(eq mode 'STOP1_MODE')(eq mode 'STOP2_MODE')(eq mode 'STOP3_MODE')))}}
+  /* Clear core pending event */
+  __SEV();
+  __WFE();
+
+        {{/if}}
+        {{#if (not (eq mode 'SLEEP_MODE'))}}
+  /* Set SLEEPDEEP bit of Cortex System Control Register */
+  SCB_EnableDeepSleep();
+
+  LL_PWR_SetPowerMode(LL_PWR_{{mode}});
+
+        {{else}}
+  /* Clear SLEEPDEEP bit of Cortex System Control Register */
+  SCB_DisableDeepSleep();
+
+        {{/if}}
+          {{~assign 'entry_mode' ''~}}
+          {{#if (and (eq mode_entry 'HAL_PWR_LOW_PWR_MODE_WFE')(not (or (eq mode 'STANDBY_MODE')(eq mode 'SHUTDOWN_MODE'))))}}
+            {{assign 'entry_mode' 'WFE'}}
+          {{else}}
+            {{assign 'entry_mode' 'WFI'}}
+          {{/if}}
+  /* DSB to ensure there are no outstanding memory transactions prior to executing {{@root.entry_mode}} and going to {{mode}} */
+  __DSB();
+
+        {{#if (eq mode_entry 'HAL_PWR_LOW_PWR_MODE_WFI')}}
+  /* Wait for interrupt request */
+  __WFI();
+
+        {{else}}
+          {{#if (eq mode 'STANDBY_MODE')}}
+  /* Wait for event cannot be used in standby mode */
+          {{else}}
+            {{#if (eq mode 'SHUTDOWN_MODE')}}
+  /* Wait for event cannot be used in shutdown mode */
+            {{else}}
+  /* Wait for event request */
+  __WFE();
+            {{/if}}
+          {{/if}}
+        {{/if}}
+
+        {{#if (or (eq mode 'STOP_MODE')(eq mode 'STOP0_MODE')(eq mode 'STOP1_MODE')(eq mode 'STOP2_MODE')(eq mode 'STOP3_MODE'))}}
+  /* Clear SLEEPDEEP bit of Cortex System Control Register */
+  SCB_DisableDeepSleep();
+        {{/if}}
+
+        {{#if (not (or (eq mode 'SLEEP_MODE')(eq mode 'STANDBY_MODE')(eq mode 'SHUTDOWN_MODE')))}}
+  /* Execution will never reach this point */
+        {{/if}}
+
+  return SYSTEM_OK;
+}
+
+      {{/if}}
+      {{#if lp_exit}}
+system_status_t mx_pwr_exit_low_power(void)
+{
+          {{#if (inArray @root.modules_activated 'RCC')}}
+  /* This API is the runtime API generated by RCC module */
+  return (mx_rcc_init());
+          {{else}}
+  /* RCC module is not activated in CubeMX. You must manually configure the RCC clock to exit low power mode */
+  return SYSTEM_OK;
+          {{/if}}
+}
+
+      {{/if}}
+      {{#if (eq lp_check true)}}
+uint32_t mx_pwr_system_was_low_power(void)
+{
+        {{#if (not (or (eq mode 'SLEEP_MODE') (eq mode 'SHUTDOWN_MODE')))}}
+  /* Check the flag that indicates if the system was resumed from a low power mode */
+          {{#if (or (eq mode 'STOP_MODE')(eq mode 'STOP0_MODE')(eq mode 'STOP1_MODE')(eq mode 'STOP2_MODE')(eq mode 'STOP3_MODE'))}}
+  return (LL_PWR_IsActiveFlag_STOP());
+          {{/if}}
+          {{#if (eq mode 'STANDBY_MODE')}}
+  return (LL_PWR_IsActiveFlag_SB());
+          {{/if}}
+        {{else}}
+  /* This API returns 0 as the MCU does not have hardware flags to indicate {{mode}} */
+  return 0;
+        {{/if}}
+}
+
+      {{/if}}
+    {{/if}}
+  {{/with}}
+{{else if (eq fct 'generate_peripheral_supply_activation')~}}
+{{!~ Generate the PWR LL peripheral independent supply activation function ~}}
+{{!~> PWR_LL fct='generate_peripheral_supply_activation' hw_resource=@root.current_resource ~}}
+  {{~assign 'independent_supply_activation_count' (lookup (helper_pwr_is_periph_independent_supply_activated hw_resource "activate") hw_resource)~}}
+  {{~assign 'is_analog_resource' (helper_pwr_is_periph_analog_resource hw_resource)~}}
+  {{#if (and (eq hw_resource 'USB') (eq @root.independent_supply_activation_count 1))}}
+  /* Enable the USB power supply and disable logical and electrical isolation */
+  LL_PWR_EnableUSBSupply();
+
+  {{else if (eq @root.is_analog_resource true)}}
+  {{/if}}
+{{else if (eq fct 'generate_peripheral_supply_deactivation')~}}
+{{!~ Generate the PWR LL peripheral independent supply deactivation function ~}}
+{{!~> PWR_LL fct='generate_peripheral_supply_deactivation' hw_resource=@root.current_resource ~}}
+  {{~assign 'independent_supply_activation_count' (lookup (helper_pwr_is_periph_independent_supply_activated hw_resource "deactivate") hw_resource)~}}
+  {{#if (and (eq hw_resource 'USB') (eq @root.independent_supply_activation_count 0))}}
+  /* Disable the USB power supply and enable logical and electrical isolation */
+  LL_PWR_DisableUSBSupply();
+
+  {{/if}}
+{{else if (eq fct 'manage_dead_battery')}}
+{{!~ Generate the PWR LL code to manage dead battery ~}}
+{{!~> PWR_LL fct='manage_dead_battery' ~}}
+  {{#if (inArray @root.ll_pwr_partial_modules_activated 'PWR')}}
+    {{#if @root.pwr_context.additional.ucpd_configuration.enable_dead_battery_mode}}
+  /* Enable Dead Battery mode */
+  {{helper_common_gen_ll_code 'LL_PWR_EnableUCPDDeadBattery'}}
+
+    {{else}}
+  /* Disable Dead Battery mode */
+  LL_PWR_DisableUCPDDeadBattery();
+
+    {{/if}}
+  {{else}}
+    {{#if @root.ucpd_context.additional.dead_battery}}
+  /* Enable Dead Battery mode */
+  {{helper_common_gen_ll_code 'LL_PWR_EnableUCPDDeadBattery'}}
+
+    {{else}}
+  /* Disable Dead Battery mode */
+  LL_PWR_DisableUCPDDeadBattery();
+
+    {{/if}}
+  {{/if}}
+{{else}}
+{{!
+ Default case which should not occur
+~}}
+#warning "Function {{fct}} not present in partial PWR_LL_partial.hbs"
+{{/if}}

@@ -1,0 +1,130 @@
+{{~log "PWR_HAL_partial generation started"~}}
+{{~log "PWR root="@root~}}
+{{~helper_pwr_globalize_API @root~}}
+{{~assign 'pwr_context' (helper_pwr_get_context 'STMicroelectronics::Device:STM32CubeMX2 Config:PWR')~}}
+{{~log "PWR_HAL_partial generate_main_supply_config: pwr_context="@root.pwr_context~}}
+{{~assign "hal_pwr_partial_modules_activated" (helper_pwr_add_analog_module (@root.peripheralsResourceManagerAPI.getPeripheralsBoundToSoftwareInstances))~}}
+{{#if (not (inArray @root.hal_pwr_partial_modules_activated 'PWR'))}}
+  {{~assign 'rcc_context' (helper_pwr_get_context 'STMicroelectronics::Device:STM32CubeMX2 Config:RCC')~}}
+  {{~log "PWR_HAL_partial generate_main_supply_config: rcc_context="@root.rcc_context~}}
+  {{~assign 'ucpd_context' (helper_pwr_get_context 'STMicroelectronics::Device:STM32CubeMX2 Config:UCPD')~}}
+  {{~log "PWR_HAL_partial generate_main_supply_config: ucpd_context="@root.ucpd_context~}}
+{{/if}}
+{{!
+  * @file Partial used to generate HAL code for PWR:
+  * @license
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  *
+  * how to use
+  * > PWR_HAL fct='xxxx' with xxxx:
+  *   * generate_main_supply_config
+  *   * generate_vos_config
+  *   * generate_write_protection_disable
+  *   * generate_write_protection_enable
+~}}
+{{#if (eq fct 'generate_main_supply_config')}}
+{{!
+ Generate the PWR HAL code to configure the main supply
+~}}
+  {{~log "PWR_HAL_partial generate_main_supply_config: supply="@root.pwr_context.additional.main_supply_configuration.mcu_main_supply~}}
+  {{#unless (eq @root.pwr_context.additional.main_supply_configuration.mcu_main_supply 'NOT_BYPASSED')}}
+    {{~log "PWR_HAL_partial generate_main_supply_config: in condition"}}
+  /* Configure the Power Supply source */
+  if (HAL_PWR_SetMainRegulatorSupply(HAL_PWR_REGULATOR_{{@root.pwr_context.additional.main_supply_configuration.mcu_main_supply}}) != HAL_OK)
+  {{else}}
+  /* Internal regulator is selected by default */
+  {{/unless}}
+  {{~log "PWR_HAL_partial generate_main_supply_config: out condition"~}}
+{{else if (eq fct 'generate_vos_config')}}
+{{!
+ Generate the PWR HAL code to configure the voltage scaling
+~}}
+  {{#if (inArray @root.hal_pwr_partial_modules_activated 'PWR')}}
+  /* Configure the Voltage scaling level */
+  if (HAL_PWR_SetMainRegulatorVoltageScalingRange(HAL_PWR_{{@root.pwr_context.additional.main_supply_configuration.voltage_scaling}}) != HAL_OK)
+  {
+    return SYSTEM_POWER_ERROR;
+  }
+  {{else}}
+  /* Configure the Voltage scaling level */
+  if (HAL_PWR_SetMainRegulatorVoltageScalingRange(HAL_PWR_{{@root.rcc_context.basic.voltage_scaling}}) != HAL_OK)
+  {
+    return SYSTEM_POWER_ERROR;
+  }
+  {{/if}}
+{{else if (eq fct 'generate_write_protection_disable')}}
+{{!
+ Generate the PWR HAL code to disable the RTC Domain Write protection
+~}}
+{{!> PWR_HAL fct='generate_write_protection_disable'}}
+  /* Disable RTC Domain Write Protection */
+  HAL_PWR_DisableRTCDomainWriteProtection();
+
+{{else if (eq fct 'generate_write_protection_enable')}}
+{{!
+ Generate the PWR HAL code to enable the RTC Domain Write protection
+~}}
+{{!> PWR_HAL fct='generate_write_protection_enable'}}
+  /* In order to simplify the code generation and management for the user, the write protection is not enabled by
+     default. In real case application, we advise to enable it once all the necessary configurations are done. */
+  /* Enable RTC Domain Write Protection */
+  /* HAL_PWR_EnableRTCDomainWriteProtection(); */
+
+{{else if (eq fct 'generate_peripheral_supply_activation')}}
+{{!~ Generate the PWR HAL peripheral independent supply activation function ~}}
+{{!~> PWR_HAL fct='generate_peripheral_supply_activation' hw_resource=@root.current_resource ~}}
+  {{~assign 'independent_supply_activation_count' (lookup (helper_pwr_is_periph_independent_supply_activated hw_resource "activate") hw_resource)~}}
+  {{~assign 'is_analog_resource' (helper_pwr_is_periph_analog_resource hw_resource)~}}
+  {{#if (and (eq hw_resource 'USB') (eq @root.independent_supply_activation_count 1))}}
+  /* Enable the USB power supply and disable logical and electrical isolation */
+  HAL_PWR_EnableVddUSBIndependentSupply();
+
+  {{else if (eq @root.is_analog_resource true)}}
+  {{/if}}
+{{else if (eq fct 'generate_peripheral_supply_deactivation')}}
+{{!~ Generate the PWR HAL peripheral independent supply deactivation function ~}}
+{{!~> PWR_HAL fct='generate_peripheral_supply_deactivation' hw_resource=@root.current_resource ~}}
+  {{~assign 'independent_supply_activation_count' (lookup (helper_pwr_is_periph_independent_supply_activated hw_resource "deactivate") hw_resource)~}}
+  {{#if (and (eq hw_resource 'USB') (eq @root.independent_supply_activation_count 0))}}
+  /* Disable the USB power supply and enable logical and electrical isolation */
+  HAL_PWR_DisableVddUSBIndependentSupply();
+
+  {{/if}}
+{{else if (eq fct 'manage_dead_battery')}}
+{{!~ Generate the PWR HAL code to manage dead battery ~}}
+{{!~> PWR_HAL fct='manage_dead_battery' ~}}
+  {{#if (inArray @root.hal_pwr_partial_modules_activated 'PWR')}}
+    {{#if @root.pwr_context.additional.ucpd_configuration.enable_dead_battery_mode}}
+  /* Enable Dead Battery mode */
+  HAL_PWR_LP_EnableUCPDDeadBattery();
+
+    {{else}}
+  /* Disable Dead Battery mode */
+  HAL_PWR_LP_DisableUCPDDeadBattery();
+
+    {{/if}}
+  {{else}}
+    {{#if @root.ucpd_context.additional.dead_battery}}
+  /* Enable Dead Battery mode */
+  HAL_PWR_LP_EnableUCPDDeadBattery();
+
+    {{else}}
+  /* Disable Dead Battery mode */
+  HAL_PWR_LP_DisableUCPDDeadBattery();
+
+    {{/if}}
+  {{/if}}
+{{else}}
+{{!
+ Default case which should not occur
+~}}
+#warning "Function {{fct}} not present in partial PWR_HAL_partial.hbs"
+{{/if}}

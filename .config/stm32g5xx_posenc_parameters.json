@@ -1,0 +1,653 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "version": "0.0.1",
+  "componentid": "::Device:STM32CubeMX2 Config:POSENC",
+  "type": "object",
+  "functions": [
+    {
+      "path": ".config/template/helpers/posenc_helpers.js",
+      "accessor": "common"
+    }
+  ],
+  "grammarVersion": "3.1",
+  "properties": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "info": {
+          "type": "object",
+          "title": "General information",
+          "properties": {
+            "labels": {
+              "type": "array",
+              "title": "Add a label",
+              "description": "Labels allow to create aliases inside mx_hal_def.h file like '<label>_init', '<label>_deinit' and '<label>_gethandle'. These aliases can be used on application side.",
+              "items": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 32,
+                "unique": "project",
+                "default": "",
+                "actions": [
+                  {
+                    "type": "error",
+                    "condition": "!/^[A-Za-z_][A-Za-z0-9_]*$/.test($value)",
+                    "message": "Name must be a valid C identifier: start with a letter or underscore, and contain only letters, digits, or underscores."
+                  }
+                ]
+              }
+            },
+            "layer": {
+              "type": "string",
+              "title": "Software layer",
+              "oneOf": [
+                {
+                  "title": "LL",
+                  "const": "LL"
+                }
+              ],
+              "variables": [
+                {
+                  "on": "update-value",
+                  "name": "HAL_PPP_PROJECT_USE_HAL",
+                  "condition": "$value === 'HAL'",
+                  "semaphore": true
+                }
+              ],
+              "default": "LL"
+            },
+            "init_type": {
+              "type": "string",
+              "title": "Resource initialization code generation",
+              "description": "Pick whether the initialization code should be generated and automatically called at startup.",
+              "oneOf": [
+                {
+                  "title": "Callable",
+                  "const": "called",
+                  "description": "Initialization code is generated and called in peripheral initialization."
+                },
+                {
+                  "title": "Generated",
+                  "const": "enabled",
+                  "description": "Initialization code is generated but not called in peripheral initialization."
+                },
+                {
+                  "title": "Not generated",
+                  "const": "disabled",
+                  "description": "Initialization code is not generated."
+                }
+              ],
+              "default": "called"
+            }
+          }
+        },
+        "basic": {
+          "title": "Main features",
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "title": "Mode",
+              "type": "string",
+              "default": "NONE",
+              "oneOf": [
+                {
+                  "title": "None",
+                  "const": "NONE"
+                },
+                {
+                  "title": "Hiperface-DSL",
+                  "const": "HIPERFACEDSL"
+                },
+                {
+                  "title": "EnDat3",
+                  "const": "ENDAT3"
+                },
+                {
+                  "title": "BiSS-C",
+                  "const": "BISS",
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$resource.features.g_bissc_nb === 1"
+                    }
+                  ]
+                }
+              ]
+            },
+            "trigger": {
+              "title": "Strobe source",
+              "type": "object",
+              "objectType": "query",
+              "query": {
+                "entity": "peripheral.interconnect.input trigger",
+                "parent": "$resource.id",
+                "title": "{{source.toUpperCase().replace('SW TRIGGER', 'SOFTWARE').replace('EXT', 'EXTI').replace('_TGO', '_TRGO').replace('[', '').replace(']', '').replace('_IT', '').replace('II', 'I').replace('_CKTIM', '')}}",
+                "sort": {},
+                "sharing": false
+              },
+              "select": "first",
+              "actions": [
+                {
+                  "type": "include",
+                  "condition": "true"
+                },
+                {
+                  "type": "info",
+                  "condition": "true",
+                  "message": "The selected interconnect must be configured manually"
+                }
+              ]
+            },
+            "strobe_resync": {
+              "title": "Strobe resync",
+              "description": "Re-shape the trigger signals from the strobe source to have them in line with the selected protocol requirements. When disabled the re-sync mechanism is bypassed.",
+              "type": "boolean",
+              "default": true,
+              "actions": [
+                {
+                  "type": "set",
+                  "condition": "($basic.protocol === 'BISS')",
+                  "computed": {
+                    "const": true
+                  }
+                },
+                {
+                  "type": "set",
+                  "condition": "($basic.protocol === 'HIPERFACEDSL')",
+                  "computed": {
+                    "const": false
+                  }
+                },
+                {
+                  "type": "disable",
+                  "condition": "($basic.protocol === 'HIPERFACEDSL') || ($basic.protocol === 'BISS')",
+                  "message": "This feature is not available for Hiperface-DSL"
+                }
+              ]
+            }
+          }
+        },
+        "additional": {
+          "title": "Advanced features",
+          "type": "object",
+          "properties": {
+            "hiperfacedsl": {
+              "title": "Hiperface-DSL",
+              "type": "object",
+              "properties": {
+                "event_driven": {
+                  "title": "Event driven access",
+                  "type": "object",
+                  "properties": {
+                    "fast_position": {
+                      "title": "Fast position",
+                      "type": "string",
+                      "default": "DISABLED",
+                      "oneOf": [
+                        {
+                          "title": "Disabled",
+                          "const": "DISABLED"
+                        },
+                        {
+                          "title": "24 bit",
+                          "const": "24BIT"
+                        },
+                        {
+                          "title": "32 bit",
+                          "const": "32BIT"
+                        },
+                        {
+                          "title": "40 bit",
+                          "const": "40BIT"
+                        }
+                      ]
+                    },
+                    "velocity": {
+                      "title": "Velocity",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "safe_position_1": {
+                      "title": "Safe channel 1 position",
+                      "type": "string",
+                      "default": "DISABLED",
+                      "oneOf": [
+                        {
+                          "title": "Disabled",
+                          "const": "DISABLED"
+                        },
+                        {
+                          "title": "24 bit",
+                          "const": "24BIT"
+                        },
+                        {
+                          "title": "32 bit",
+                          "const": "32BIT"
+                        },
+                        {
+                          "title": "40 bit",
+                          "const": "40BIT"
+                        }
+                      ]
+                    },
+                    "safe_crc": {
+                      "title": "Safe channel 1 CRC",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  }
+                },
+                "safe_spi": {
+                  "title": "Safe channel 2 SPI",
+                  "type": "boolean",
+                  "default": false,
+                  "actions": [
+                    {
+                      "type": "set",
+                      "condition": "$basic.protocol !== 'HIPERFACEDSL'",
+                      "computed": {
+                        "const": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "actions": [
+                {
+                  "type": "enable",
+                  "condition": "$basic.protocol === 'HIPERFACEDSL'",
+                  "message" : "Hiperface-DSL features are only available when Hiperface-DSL protocol is selected"
+                }
+              ]
+            },
+            "bissc": {
+              "title": "BiSS C",
+              "type": "object",
+              "properties": {
+                "divider": {
+                  "title": "Divider",
+                  "type": "string",
+                  "default": "1",
+                  "oneOf": [
+                    {
+                      "title": "1",
+                      "const": "1"
+                    },
+                    {
+                      "title": "10",
+                      "const": "10"
+                    }
+                  ]
+                },
+                "event_driven": {
+                  "title": "Event driven access",
+                  "type": "object",
+                  "properties": {
+                    "single_cycle_data1": {
+                      "title": "Single cycle data 1",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "single_cycle_data2": {
+                      "title": "Single cycle data 2",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "single_cycle_data3": {
+                      "title": "Single cycle data 3",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  }
+                }
+              },
+              "actions": [
+                {
+                  "type": "enable",
+                  "condition": "($basic.protocol === 'BISS')",
+                  "message" : "BiSS C features are only available when BiSS C protocol is selected"
+                },
+                {
+                  "type": "include",
+                  "condition": "$resource.features.g_bissc_nb === 1"
+                }
+              ]
+            }
+          }
+        },
+        "system": {
+          "title": "System",
+          "type": "object",
+          "properties": {
+            "gpio": {
+              "title": "GPIO",
+              "type": "object",
+              "properties": {
+                "in": {
+                  "title": "POSENC_IN",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!$get('pinout.peripheralCanBeMapped', $resource.id, 'IN')"
+                    }
+                  ],
+                  "type": "object",
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "IN",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        },
+                        "pull": {
+                          "const": "NO"
+                        },
+                        "speed": {
+                          "const": "VERY_HIGH"
+                        },
+                        "output_type": {
+                          "const": "PUSHPULL"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "out": {
+                  "title": "POSENC_OUT",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!$get('pinout.peripheralCanBeMapped', $resource.id, 'OUT')"
+                    }
+                  ],
+                  "type": "object",
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "OUT",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        },
+                        "pull": {
+                          "const": "NO"
+                        },
+                        "speed": {
+                          "const": "VERY_HIGH"
+                        },
+                        "output_type": {
+                          "const": "PUSHPULL"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "en": {
+                  "title": "POSENC_EN",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!$get('pinout.peripheralCanBeMapped', $resource.id, 'EN')"
+                    }
+                  ],
+                  "type": "object",
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "EN",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        },
+                        "pull": {
+                          "const": "NO"
+                        },
+                        "speed": {
+                          "const": "VERY_HIGH"
+                        },
+                        "output_type": {
+                          "const": "PUSHPULL"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "mosi": {
+                  "title": "POSENC_MOSI",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!$get('pinout.peripheralCanBeMapped', $resource.id, 'MOSI') || ($additional.hiperfacedsl.safe_spi === false)"
+                    }
+                  ],
+                  "type": "object",
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "MOSI",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        },
+                        "pull": {
+                          "const": "NO"
+                        },
+                        "speed": {
+                          "const": "VERY_HIGH"
+                        },
+                        "output_type": {
+                          "const": "PUSHPULL"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "miso": {
+                  "title": "POSENC_MISO",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!$get('pinout.peripheralCanBeMapped', $resource.id, 'MISO') || ($additional.hiperfacedsl.safe_spi === false)"
+                    }
+                  ],
+                  "type": "object",
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "MISO",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        },
+                        "pull": {
+                          "const": "NO"
+                        },
+                        "speed": {
+                          "const": "VERY_HIGH"
+                        },
+                        "output_type": {
+                          "const": "PUSHPULL"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "sck": {
+                  "title": "POSENC_SCK",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!$get('pinout.peripheralCanBeMapped', $resource.id, 'SCK') || ($additional.hiperfacedsl.safe_spi === false)"
+                    }
+                  ],
+                  "type": "object",
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "SCK",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        },
+                        "pull": {
+                          "const": "NO"
+                        },
+                        "speed": {
+                          "const": "VERY_HIGH"
+                        },
+                        "output_type": {
+                          "const": "PUSHPULL"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "sel": {
+                  "title": "POSENC_SEL",
+                  "actions": [
+                    {
+                      "type": "exclude",
+                      "condition": "!$get('pinout.peripheralCanBeMapped', $resource.id, 'SEL') || ($additional.hiperfacedsl.safe_spi === false)"
+                    }
+                  ],
+                  "type": "object",
+                  "objectType": "need.pinout.signals",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_GPIO_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "SEL",
+                      "constraints": {
+                        "mode": {
+                          "const": "ALTERNATE"
+                        },
+                        "pull": {
+                          "const": "NO"
+                        },
+                        "speed": {
+                          "const": "VERY_HIGH"
+                        },
+                        "output_type": {
+                          "const": "PUSHPULL"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "nvic": {
+              "type": "object",
+              "title": "NVIC",
+              "properties": {
+                "enable_interruption": {
+                  "type": "boolean",
+                  "title": "Interrupt",
+                  "default": false
+                },
+                "irq_handler_generation": {
+                  "type": "boolean",
+                  "title": "IRQ Handler generation",
+                  "default": true,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$system.nvic.enable_interruption && $info.layer === 'HAL'"
+                    }
+                  ]
+                },
+                "nvic_config": {
+                  "title": "NVIC POSENC",
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$system.nvic.enable_interruption"
+                    }
+                  ],
+                  "type": "object",
+                  "objectType": "need.interrupt.lines",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_CORTEX_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "*"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

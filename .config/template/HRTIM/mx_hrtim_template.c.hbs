@@ -1,0 +1,2089 @@
+{{!--
+  ******************************************************************************
+  * @file           : mx_hrtim_template.c.hbs
+  * @brief          : Peripheral initialization
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  ~--}}
+{{#helper_common_beautifier}}
+{{assign "codegen_ctxt" (helper_common_get_codegen_context 'HRTIM' (get '') @root.EnvVarAPI @root.peripheralsResourceManagerAPI @root.SWConfigurationAPI)~}}
+{{log "HRTIM template codegen_ctxt:" @root.codegen_ctxt~}}
+{{assign 'strategy' @root.codegen_ctxt.strategy~}}
+{{assign 'current_resource' @root.codegen_ctxt.current_resource~}}
+{{assign 'instances' @root.codegen_ctxt.instances~}}
+{{assign 'dma_resource' @root.codegen_ctxt.dma_resource~}}
+{{> SYSTEM fct='system_check_ll_optim'}}
+/**
+  ******************************************************************************
+  * @file           : mx_{{lowercase @root.current_resource}}.c
+  * @brief          : Peripheral initialization
+{{> LICENSE}}
+
+/* Includes ------------------------------------------------------------------*/
+#include "mx_{{lowercase @root.current_resource}}.h"
+
+/* Private typedef -----------------------------------------------------------*/
+/* Private define ------------------------------------------------------------*/
+/* Private macro -------------------------------------------------------------*/
+/* Private variables ---------------------------------------------------------*/
+/* Private functions prototype------------------------------------------------*/
+
+/* Exported variables by reference--------------------------------------------*/
+{{!
+    Generation of handle for each function defined in HAL layer
+    - save a variable to indicate if handle has been already created (only 1 handle by function)
+~}}
+{{#each @root.instances~}}
+  {{~assign 'hrtim_cxt' config~}}
+  {{~log "HRTIM template hrtim_cxt:" (toJSON @root.hrtim_cxt)~}}
+  {{~assign 'current_resource' current_resource~}}
+  {{~assign 'current_layer' @root.hrtim_cxt.info.layer~}}
+  {{~log "HRTIM template current_resource:" @root.current_resource~}}
+{{#if (eq @root.current_layer 'HAL')}}
+static hal_hrtim_handle_t h{{@root.current_resource}};
+{{/if}}
+{{/each}}
+{{#if (eq @root.current_layer 'HAL')}}
+{{> GPIO_HAL fct='gpio_exti_get_variables' resource=@root.current_resource~}}
+{{> DMA_HAL fct='get_dma_handles' resource=@root.dma_resource strategy=@root.strategy}}
+{{else}}
+{{> DMA_LL fct='get_dma_lli_variables' resource=@root.dma_resource strategy=@root.strategy}}
+{{/if}}
+
+/* Exported function definition ----------------------------------------------*/
+{{assign 'current_index' 0~}}
+{{assign 'nvic_context' 'undefined'~}}
+{{assign 'nvic_generate_handler' true~}}
+{{#each @root.instances}}
+  {{~assign 'hrtim_cxt' config~}}
+  {{~assign 'current_resource' current_resource~}}
+  {{~assign 'name' @root.hrtim_cxt.name~}}
+  {{~assign 'current_layer' @root.hrtim_cxt.info.layer~}}
+  {{~assign 'current_index' (helper_common_get_index @root.current_resource)~}}
+{{! Initialize the context for LL code optimization ~}}
+{{assign 'lut_table'   (helper_hrtim_get_lut_table 'HRTIMV1')~}}
+{{helper_common_initialize_ll_code @root.optim_enable @root.lut_table @root.current_resource~}}
+/******************************************************************************/
+/* Exported functions for SW instance{{index}} in {{@root.current_layer}} layer */
+/******************************************************************************/
+{{assign 'from_where' 'hrtim_fct_exp_def'}}
+{{assign 'fct_name' (helper_common_get_generated_function_name @root.current_resource @root.current_layer @root.current_index @root.current_function @root.from_where)~}}
+{{assign 'current_index' (add @root.current_index 1)~}}
+{{assign 'IsFltCounterConfig' false~}}
+{{assign 'IsDeclaredAutoDelayedConfig' false~}}
+{{assign 'IsDeclaredDeadtimeConfig' false~}}
+{{assign 'IsDeclaredDelayedProtConfig' false~}}
+{{assign 'IsDeclaredChopperConfig' false~}}
+{{assign 'IsDeclaredEevFilterConfig' false~}}
+{{assign 'IsDeclaredEevCounterConfig' false~}}
+{{assign 'IsDeclaredDualChannelDacConfig' false~}}
+{{assign 'IsDeclaredConfigXbarOvrConfig' false~}}
+{{assign 'FirstValue' true~}}
+{{assign 'auto_delayed_cmp1' false~}}
+{{assign 'cmp1_value' 0~}}
+{{assign 'cmp3_value' 0~}}
+{{assign 'tima_in_push_pull_mode' false~}}
+{{assign 'timb_in_push_pull_mode' false~}}
+{{assign 'timc_in_push_pull_mode' false~}}
+{{assign 'timd_in_push_pull_mode' false~}}
+{{assign 'time_in_push_pull_mode' false~}}
+{{assign 'timf_in_push_pull_mode' false~}}
+{{!
+    Generation of initialization function used in HAL
+~}}
+{{#with @root.hrtim_cxt}}
+{{#if (eq @root.current_layer 'HAL')}}
+hal_hrtim_handle_t *{{@root.fct_name}}_init(void)
+{
+  /* HRTIM instance initialization */
+  if (HAL_HRTIM_Init(&h{{@root.current_resource}}, HAL_{{uppercase @root.current_resource}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{> RCC fct='generate_peripheral_clock_activation' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_kernel_clock' hw_resource=@root.current_resource sw_resource='HRTIM'}}
+
+{{#with system}}
+{{assign 'hrtim_inputs' (helper_hrtim_get_gpio_selectors gpio 'input')~}}
+{{> GPIO_HAL fct='init_resource' resource=@root.current_resource selectors=@root.hrtim_inputs return_if_failed='NULL' init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+{{/with}}{{!system~}}
+{{#with channels}}
+{{#if (helper_hrtim_any_resource_used outputs "use_channel")}}
+  /* HRTIM output channels configuration */
+  hal_hrtim_output_config_t output_config;
+
+{{#each outputs}}
+{{#if use_channel}}
+  /* HAL_HRTIM_{{_foreignKey}} configuration */
+{{#with output_config}}
+{{#if set_crossbar.length}}
+  output_config.set = {{#each set_crossbar}}HAL_HRTIM_OUT_SET_{{helper_hrtim_convert_output_set_reset_event ../../_foreignKey source}}{{#unless @last}} \
+                      | {{/unless}}{{/each}};
+{{else}}
+  output_config.set = HAL_HRTIM_OUT_SET_NONE;
+{{/if}}
+{{#if reset_crossbar.length}}
+  output_config.reset = {{#each reset_crossbar}}HAL_HRTIM_OUT_RESET_{{helper_hrtim_convert_output_set_reset_event ../../_foreignKey source}}{{#unless @last}} \
+                        | {{/unless}}{{/each}};
+{{else}}
+  output_config.reset = HAL_HRTIM_OUT_RESET_NONE;
+{{/if}}
+  output_config.polarity = HAL_HRTIM_OUTPUT_ACTIVE_{{polarity}};
+  output_config.idle_level = HAL_HRTIM_OUTPUT_IDLE_{{idle_level}};
+  output_config.fault_level = HAL_HRTIM_OUTPUT_FAULT_{{fault_level}};
+
+  if (HAL_HRTIM_OUT_SetConfig(&h{{@root.current_resource}}, HAL_HRTIM_{{../_foreignKey}}, &output_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/with}}{{!output_config~}}
+{{/if}}{{!use_channel~}}
+{{/each}}{{!outputs~}}
+{{/if}}{{!helper_hrtim_any_resource_used~}}
+{{#if (helper_hrtim_any_resource_used external_events "use_channel")}}
+  /* HRTIM external events configuration */
+  hal_hrtim_eev_config_t eev_config;
+
+{{#unless (eq ../additional.external_events_prescaler 1)}}
+  /* External event sampling clock prescaler */
+  if (HAL_HRTIM_EEV_SetPrescaler(&h{{@root.current_resource}}, HAL_HRTIM_EEV_DIV{{../additional.external_events_prescaler}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq external_events_prescaler 1~}}
+{{#each external_events}}
+{{#if use_channel}}
+{{#with external_event_config}}
+  /* HAL_HRTIM_{{../_foreignKey}} configuration */
+  eev_config.source = HAL_HRTIM_{{../_foreignKey}}_{{helper_hrtim_convert_source this.source.source}};
+  eev_config.sensitivity = HAL_HRTIM_EEV_{{this.sensitivity}};
+  eev_config.filter = HAL_HRTIM_{{this.filter}};
+{{#if (eq this.fast_mode false)}}
+  eev_config.mode = HAL_HRTIM_EEV_SYNCHRONOUS;
+{{else}}
+  eev_config.mode = HAL_HRTIM_EEV_ASYNCHRONOUS;
+
+{{/if}}{{!eq fast_mode false}}
+  if (HAL_HRTIM_EEV_SetConfig(&h{{@root.current_resource}}, HAL_HRTIM_{{../_foreignKey}}, &eev_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/with}}{{!external_event_config~}}
+{{/if}}{{!use_channel~}}
+{{/each}}{{!external_events~}}
+{{/if}}{{!helper_hrtim_any_resource_used~}}
+{{#if (helper_hrtim_any_resource_used fault_inputs "use_channel")}}
+  /* HRTIM fault inputs configuration */
+  hal_hrtim_flt_config_t flt_config;
+
+{{#unless (eq ../additional.fault_inputs_prescaler 1)}}
+  if (HAL_HRTIM_FLT_SetPrescaler(&h{{@root.current_resource}}, HAL_HRTIM_FLT_DIV{{../additional.fault_inputs_prescaler}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq fault_inputs_prescaler 1~}}
+{{#each fault_inputs}}
+{{#if use_channel}}
+{{#with fault_input_config}}
+  /* HAL_HRTIM_{{../_foreignKey}} configuration */
+  flt_config.source = HAL_HRTIM_{{../_foreignKey}}_{{helper_hrtim_convert_source this.source.source}};
+  flt_config.polarity = HAL_HRTIM_FLT_{{this.polarity}};
+  flt_config.filter = HAL_HRTIM_{{this.filter}};
+
+  if (HAL_HRTIM_FLT_SetConfig(&h{{@root.current_resource}}, HAL_HRTIM_{{../_foreignKey}}, &flt_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/with}}{{!fault_input_config~}}
+{{#with blanking}}
+{{#unless (eq source "NO_BLANKING")}}
+  if (HAL_HRTIM_FLT_SetBlanking(&h{{@root.current_resource}}, HAL_HRTIM_{{../_foreignKey}}, HAL_HRTIM_FLT_BLK_{{helper_hrtim_get_fault_blanking_mode ../_foreignKey source}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#if enable}}
+  if (HAL_HRTIM_FLT_EnableBlanking(&h{{@root.current_resource}}, HAL_HRTIM_{{../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}} {{!enable~}}
+{{/unless}}{{!this.source NO_BLANKING~}}
+{{/with}}{{!blanking~}}
+{{#with fault_counter}}
+{{#if use}}
+{{#unless @root.IsFltCounterConfig}}
+{{assign 'IsFltCounterConfig' true }}
+  /* Fault counter configuration */
+  hal_hrtim_flt_counter_config_t flt_counter_config;
+
+{{/unless}}
+  flt_counter_config.threshold = {{threshold}};
+  flt_counter_config.reset_mode = HAL_HRTIM_FLT_COUNTER_RESET_{{reset_mode}};
+
+  if (HAL_HRTIM_FLT_SetCounter(&h{{@root.current_resource}}, HAL_HRTIM_{{../_foreignKey}}, &flt_counter_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!use~}}
+{{/with}}{{!fault_counter~}}
+{{/if}}{{!use_channel~}}
+{{#if fault_input_config.enable}}
+  /* Enable fault input */
+  if (HAL_HRTIM_FLT_Enable(&h{{@root.current_resource}}, HAL_HRTIM_{{_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!fault_input_config.enable~}}
+{{#if lock}}
+  /* Lock fault input configuration */
+  if (HAL_HRTIM_FLT_Lock(&h{{@root.current_resource}}, HAL_HRTIM_{{_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!lock~}}
+{{/each}}{{!fault_inputs~}}
+{{/if}}{{!helper_hrtim_any_resource_used~}}
+{{#if ../additional.hsp_break_selection}}
+{{#if (eq @root.current_resource 'HRTIM1')}}
+{{assign 'sysflt_source' 'HAL_HRTIM_SYSFLT_HSP_BREAK0_PWM_SAFE'}}
+{{else}}
+{{assign 'sysflt_source' 'HAL_HRTIM_SYSFLT_HSP_BREAK2_PWM_SAFE' }}
+{{/if}}
+  /* Connect HSP break output to system fault input */
+  if (HAL_HRTIM_FLT_SetSystemFaultInputSource(&h{{@root.current_resource}}, {{@root.sysflt_source}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!../additional.hsp_break_selection~}}
+{{#if ../additional.syncin.use}}
+  /* Synchronization input source selection */
+  if (HAL_HRTIM_SetSynchroInputSource(&h{{@root.current_resource}}, HAL_HRTIM_SYNC_INPUT_{{helper_hrtim_convert_source ../additional.syncin.source.source}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!../additional.syncin.use~}}
+{{#if ../additional.syncout.use}}
+  /* Synchronization output configuration */
+  hal_hrtim_sync_output_config_t sync_output_config;
+
+  sync_output_config.source = HAL_HRTIM_SYNC_OUTPUT_{{../additional.syncout.source}};
+  sync_output_config.mode = HAL_HRTIM_SYNC_OUTPUT_{{../additional.syncout.mode}};
+
+  if (HAL_HRTIM_SetSynchroOutput(&h{{@root.current_resource}}, &sync_output_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!../additional.syncout.use~}}
+{{/with}}{{!channels~}}
+{{#with basic}}
+{{#if (helper_hrtim_any_resource_used timers "use")}}
+  /* Timers configuration */
+  hal_hrtim_timer_config_t timer_config;
+
+{{#each timers}}
+{{#if use}}
+  /* {{_foreignKey}} configuration */
+{{#with timer_config}}
+{{#if interrupt_request_sources}}
+{{#if interrupt_request_sources.length}}
+  /* Interrupt configuration */
+  if (HAL_HRTIM_SetConfigInterrupts(&h{{@root.current_resource}}, HAL_HRTIM_INTERRUPT_{{helper_hrtim_convert_timer ../_foreignKey}}, {{#each interrupt_request_sources}}HAL_HRTIM_OPT_IT_{{source}}{{#unless @last}} \
+                                                                          | {{/unless}}{{/each}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{/if}}{{!interrupt_request_sources~}}
+{{assign 'IsEnabledPreload' false~}}
+{{#with time_base}}
+  /* Time base configuration */
+  timer_config.prescaler = HAL_HRTIM_TIM_PRESCALER_{{prescaler}};
+  timer_config.period = {{period}};
+  timer_config.repetition = {{repetition}};
+  timer_config.operating_mode = HAL_HRTIM_TIM_MODE_{{operating_mode}};
+  timer_config.counting_mode = HAL_HRTIM_TIM_COUNTING_{{counting_mode}};
+
+  if (HAL_HRTIM_TIM_SetConfig(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, &timer_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/with}}{{!time_base~}}
+{{#if preload}}
+{{assign 'IsEnabledPreload' true~}}
+{{/if}}{{!preload~}}
+{{#unless (eq interleaved_mode "DISABLE")}}
+  /* Interleaved mode selection */
+  if (HAL_HRTIM_TIM_SetInterleavedMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../_foreignKey}}, HAL_HRTIM_INTERLEAVED_{{interleaved_mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq interleaved_mode "DISABLE"~}}
+{{#unless (eq synchronization "DISABLED")}}
+  /* Synchronisation mode configuration */
+  if (HAL_HRTIM_TIM_SetSlaveMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../_foreignKey}}, HAL_HRTIM_TIM_SLAVE_{{synchronization}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq synchronization "DISABLED"~}}
+{{#if (and
+  ../../../additional.burst_mode.use
+  (or
+    (not (eq burst_mode "MAINTAIN"))
+    (and
+      output_stage.burst_mode.output1
+      (not (eq output_stage.burst_mode.output1 "DISABLE"))
+    )
+    (and
+      output_stage.burst_mode.output2
+      (not (eq output_stage.burst_mode.output2 "DISABLE"))
+    )
+  )
+)}}
+  /* Burst mode configuration */
+{{#unless (eq burst_mode "MAINTAIN")}}
+  if (HAL_HRTIM_TIM_SetBurstMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../_foreignKey}}, HAL_HRTIM_TIM_BURST_MODE_{{burst_mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}
+{{#if (and output_stage.burst_mode.output1 (not (eq output_stage.burst_mode.output1 "DISABLE")))}}
+  if (HAL_HRTIM_OUT_SetBurstMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_get_output_channel (helper_hrtim_convert_timer ../_foreignKey) 1}}, HAL_HRTIM_OUT_BURST_MODE_{{output_stage.burst_mode.output1}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{#if (and output_stage.burst_mode.output2 (not (eq output_stage.burst_mode.output2 "DISABLE")))}}
+  if (HAL_HRTIM_OUT_SetBurstMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_get_output_channel (helper_hrtim_convert_timer ../_foreignKey) 2}}, HAL_HRTIM_OUT_BURST_MODE_{{output_stage.burst_mode.output2}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{/if}}{{!additional.burst_mode.use~}}
+{{#if roll_over_event}}
+{{#with roll_over_event}}
+{{#unless (eq fault_and_event "BOTH")}}
+  if (HAL_HRTIM_TIM_SetRollOverMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_ROLL_OVER_FLT_EEV, HAL_HRTIM_ROLL_OVER_{{fault_and_event}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq fault_and_event "BOTH"~}}
+{{#unless (eq burst_mode "BOTH")}}
+  if (HAL_HRTIM_TIM_SetRollOverMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_ROLL_OVER_BURST_MODE, HAL_HRTIM_ROLL_OVER_{{burst_mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq burst_mode "BOTH"~}}
+{{#unless (eq adc_trigger "BOTH")}}
+  if (HAL_HRTIM_TIM_SetRollOverMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_ROLL_OVER_ADC, HAL_HRTIM_ROLL_OVER_{{adc_trigger}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq adc_trigger "BOTH"~}}
+{{#unless (eq output "BOTH")}}
+  if (HAL_HRTIM_TIM_SetRollOverMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_ROLL_OVER_OUTPUT, HAL_HRTIM_ROLL_OVER_{{output}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq output "BOTH"~}}
+{{#unless (eq update "BOTH")}}
+  if (HAL_HRTIM_TIM_SetRollOverMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_ROLL_OVER_UPDATE, HAL_HRTIM_ROLL_OVER_{{update}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq update "BOTH"~}}
+{{/with}}{{!roll_over_event~}}
+{{/if}}{{!roll_over_event~}}
+{{#with update_management}}
+{{#if update_sources.length}}
+  /* Registers preload and update management */
+  if (HAL_HRTIM_TIM_SetUpdateSource(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, {{#each update_sources}}HAL_HRTIM_UPDATE_SOURCE_{{source}}{{#unless @last}} \
+                                                            | {{/unless}}{{/each}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!update_sources.length~}}
+{{#unless (eq update_gating "DMABURST_INDEPENDENT")}}
+  if (HAL_HRTIM_TIM_SetUpdateGating(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_UPDATE_{{helper_hrtim_convert_update_gating update_gating update_enable_source.source}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq update_gating "DMABURST_INDEPENDENT"~}}
+{{#if update_resync}}
+  if (HAL_HRTIM_TIM_EnableUpdateResync(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!update_resync~}}
+{{/with}}{{!update_management~}}
+{{#if reset_triggers}}
+{{#if reset_triggers.length}}
+  /* Counter reset sources selection */
+  if (HAL_HRTIM_TIM_SetResetSource(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../_foreignKey}}, {{#each reset_triggers}}HAL_HRTIM_RESET_{{helper_hrtim_convert_capture_or_reset_trigger_source ../../_foreignKey source}}{{#unless @last}} \
+                                                             | {{/unless}}{{/each}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!reset_triggers.length~}}
+{{/if}}{{!reset_triggers~}}
+{{#each compare_units}}
+{{#if compare_value}}
+  if (HAL_HRTIM_TIM_SetCompareValue(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_COMPARE_UNIT_{{helper_hrtim_extract_unit_number _foreignKey}}, {{compare_value}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!compare_value~}}
+{{#if greater_than_comparison_mode}}
+  if (HAL_HRTIM_TIM_EnableGTCompare(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_COMPARE_UNIT_{{helper_hrtim_extract_unit_number _foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!greater_than_comparison_mode~}}
+{{#if auto_delayed_mode}}
+{{#unless (eq auto_delayed_mode "DISABLE")}}
+{{#unless @root.IsDeclaredAutoDelayedConfig}}
+{{assign 'IsDeclaredAutoDelayedConfig' true}}
+  hal_hrtim_auto_delayed_config_t auto_delayed_config;
+
+{{/unless}}
+  auto_delayed_config.mode = HAL_HRTIM_AUTODELAYED_{{auto_delayed_mode}};
+  auto_delayed_config.timeout_cycles = {{timeout}};
+
+  if (HAL_HRTIM_TIM_SetAutoDelayedMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_COMPARE_UNIT_{{helper_hrtim_extract_unit_number _foreignKey}}, &auto_delayed_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq auto_delayed_mode "DISABLE"~}}
+{{/if}}{{!auto_delayed_mode~}}
+{{#if triggered_half_mode}}
+{{#unless (eq triggered_half_mode "DISABLE")}}
+  if (HAL_HRTIM_TIM_SetTriggeredHalfMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_TRIG_HALF_{{triggered_half_mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!(eq triggered_half_mode "DISABLE")~}}
+{{/if}}{{!triggered_half_mode~}}
+{{/each}}{{!compare_units~}}
+{{#each capture_units}}
+{{#if triggers}}
+  if (HAL_HRTIM_TIM_SetCaptureTrigger(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_CAPTURE_UNIT_{{helper_hrtim_extract_unit_number _foreignKey}}, {{#each triggers}}HAL_HRTIM_CAPTURE_{{helper_hrtim_convert_capture_or_reset_trigger_source ../../../_foreignKey source}}{{#unless @last}} \
+                                                                                          | {{/unless}}{{/each}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!triggers~}}
+{{/each}}{{!capture_units~}}
+{{#with dac_triggers}}
+{{#unless (eq dac_trigger_output 0)}}
+  /* DAC triggers configuration */
+  if (HAL_HRTIM_TIM_SetDACTrigger(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, HAL_HRTIM_DAC_TRIGGER{{dac_trigger_output}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq dac_trigger_output 0~}}
+{{#if (and dual_channel_dac (not (eq dual_channel_dac "DISABLED")))}}
+{{#unless @root.IsDeclaredDualChannelDacConfig}}
+{{assign 'IsDeclaredDualChannelDacConfig' true}}
+  /* Dual channel DAC trigger configuration */
+  hal_hrtim_dual_channel_dac_triggers_config_t dual_channel_dac_triggers_config;
+
+{{/unless}}
+  dual_channel_dac_triggers_config.step_trigger =  HAL_HRTIM_DUAL_DAC_STEP_{{helper_hrtim_convert_dual_channel_dac_trigger 'STEP' dual_channel_dac}};
+  dual_channel_dac_triggers_config.reset_trigger =  HAL_HRTIM_DUAL_DAC_RESET_{{helper_hrtim_convert_dual_channel_dac_trigger 'RESET' dual_channel_dac}};
+
+  if (HAL_HRTIM_TIM_SetDualChannelDACTriggers(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}, &dual_channel_dac_triggers_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#if enable}}
+  if (HAL_HRTIM_TIM_EnableDualChannelDAC(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!enable~}}
+{{/if}}{{!(and dual_channel_dac (not (eq dual_channel_dac "DISABLED")))~}}
+{{/with}}{{!dac_triggers~}}
+{{#with crossbar_override}}
+{{#if use}}
+{{#unless @root.IsDeclaredConfigXbarOvrConfig}}
+{{assign 'IsDeclaredConfigXbarOvrConfig' true}}
+  /* Crossbar crossbar_override configuration */
+  hal_hrtim_xbar_ovr_config_t xbar_ovr_config;
+
+{{/unless}}
+{{#with config}}
+  xbar_ovr_config.mode = HAL_HRTIM_XBAR_OVR_{{mode}};
+{{#if (or triggers.length external_triggers.length)}}
+  xbar_ovr_config.triggers = {{#each triggers}}HAL_HRTIM_XBAR_OVR_{{source}}{{#unless @last}} \
+                      | {{/unless}}{{/each}}{{#if (and triggers.length external_triggers.length)}} \
+                      | {{/if}}{{#each external_triggers}}HAL_HRTIM_XBAR_OVR_{{helper_hrtim_convert_source source}}{{#unless @last}} \
+                      | {{/unless}}{{/each}};
+{{else}}
+  xbar_ovr_config.triggers = HAL_HRTIM_XBAR_OVR_NONE;
+{{/if}}
+
+  if (HAL_HRTIM_TIM_SetConfigXbarOvr(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../_foreignKey}}, &xbar_ovr_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#each force_mode_config}}
+{{#if (and (or (eq force_mode "DELAY1") (eq force_mode "DELAY2")) (not (eq delay 0)))}}
+  if (HAL_HRTIM_OUT_SetXbarOvrForceMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_get_output_channel (helper_hrtim_convert_timer ../../../../_foreignKey) (add @index 1)}}, HAL_HRTIM_XBAR_OVR_FORCE_{{force_mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+  if (HAL_HRTIM_TIM_SetXbarOvrDelay(&h{{@root.current_resource}},HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}, HAL_HRTIM_XBAR_OVR_{{force_mode}}, {{delay}}) != HAL_OK)
+  {
+    return NULL;
+  }
+{{/if}} {{!force_mode INACTIVE/ACTIVE~}}
+{{#if (or (eq force_mode "INACTIVE") (eq force_mode "ACTIVE"))}}
+  if (HAL_HRTIM_OUT_SetXbarOvrForceMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_get_output_channel (helper_hrtim_convert_timer ../../../../_foreignKey) (add @index 1)}}, HAL_HRTIM_XBAR_OVR_FORCE_{{force_mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}} {{!force_mode DELAY1/DELAY2~}}
+{{#if (eq force_mode "EVENT")}}
+  if (HAL_HRTIM_OUT_SetXbarOvrForceMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_get_output_channel (helper_hrtim_convert_timer ../../../../_foreignKey) (add @index 1)}}, HAL_HRTIM_XBAR_OVR_FORCE_{{force_mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+  if (HAL_HRTIM_OUT_SetXbarOvrForcingEvents(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_get_output_channel (helper_hrtim_convert_timer ../../../../_foreignKey) (add @index 1)}},  {{#each forcing_events}}HAL_HRTIM_XBAR_OVR_FORCING_{{source}}{{#unless @last}} \
+                                                                       | {{/unless}}{{/each}}) != HAL_OK)
+  {
+    return NULL;
+  }
+{{/if}}
+{{/each}}
+{{#if enable}}
+  if (HAL_HRTIM_TIM_EnableXbarOvr(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!enable~}}
+{{#if enable_dual_channel_dac}}
+  if (HAL_HRTIM_TIM_EnableDualDACXbarOvr(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!enable_dual_channel_dac~}}
+{{/with}}{{!config~}}
+{{/if}}{{!use~}}
+{{/with}}{{!crossbar_override}}
+{{#with external_events_config}}
+{{#if external_events.length}}
+{{#unless @root.IsDeclaredEevFilterConfig}}
+{{assign 'IsDeclaredEevFilterConfig' true}}
+  /* Configure event filtering at timing unit level */
+  hal_hrtim_eev_filter_config_t eev_filter_config;
+
+{{/unless}}
+{{#each external_events}}
+{{#if (and source (not (eq source 0)))}}
+  if (HAL_HRTIM_TIM_SetCombinedEventSource(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../_foreignKey}}, HAL_HRTIM_{{eev}}, HAL_HRTIM_{{eev}}_SRC_{{helper_hrtim_get_combined_event_source_value eev source}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{#with eev_filter_config}}
+{{#if blanking}}
+  eev_filter_config.filter = HAL_HRTIM_{{helper_hrtim_convert_event_filter ../../../../_foreignKey 'TIMFLTR' blanking}};
+{{else}}
+{{#if windowing}}
+  eev_filter_config.filter = HAL_HRTIM_{{helper_hrtim_convert_event_filter ../../../../_foreignKey 'TIMWIN' windowing}};
+{{else}}
+  eev_filter_config.filter = HAL_HRTIM_NO_FILTERING;
+{{/if}}
+{{/if}}
+{{#if notification}}
+  eev_filter_config.notification = HAL_HRTIM_EEV_POSTPONED;
+{{else}}
+  eev_filter_config.notification = HAL_HRTIM_EEV_IMMEDIATE;
+{{/if}}{{!notification}}
+  if (HAL_HRTIM_TIM_SetEventFilter(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}, HAL_HRTIM_{{../eev}}, &eev_filter_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/with}}{{!eev_filter_config~}}
+{{/each}}{{!external_events~}}
+{{/if}}{{!external_events.length~}}
+{{#if event_counters.length}}
+{{#unless @root.IsDeclaredEevCounterConfig}}
+{{assign 'IsDeclaredEevCounterConfig' true}}
+  /* Configure event counters */
+  hal_hrtim_eev_counter_config_t eev_counter_config;
+
+{{/unless}}
+{{#each event_counters}}
+  eev_counter_config.threshold = {{threshold}};
+  eev_counter_config.reset_mode = HAL_HRTIM_EEV_COUNTER_RESET_{{reset_mode}};
+  eev_counter_config.event = HAL_HRTIM_{{source}};
+
+  if (HAL_HRTIM_TIM_SetEventCounter(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../_foreignKey}}, HAL_HRTIM_EEV_COUNTER_{{event_counter}}, &eev_counter_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#if enable}}
+  if (HAL_HRTIM_TIM_EnableEventCounter(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../_foreignKey}}, HAL_HRTIM_EEV_COUNTER_{{event_counter}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{/each}}{{!event_counters~}}
+{{/if}}{{!event_counters.length~}}
+{{/with}}{{!external_events_config~}}
+{{#with output_stage}}
+{{#if push_pull_mode}}
+  /* Enable push-pull mode */
+
+  if (HAL_HRTIM_TIM_EnablePushPull(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!push_pull_mode~}}
+{{#if swap_mode}}
+  /* Enable swap mode */
+
+  if (HAL_HRTIM_TIM_EnableSwapMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!swap_mode~}}
+{{#with deadtime}}
+{{#if use}}
+{{#unless @root.IsDeclaredDeadtimeConfig}}
+{{assign 'IsDeclaredDeadtimeConfig' true}}
+  /* Configure deadtime */
+  hal_hrtim_deadtime_config_t deadtime_config;
+
+{{/unless}}
+{{#with config}}
+{{#unless (eq prescaler "DIV8")}}
+  if (HAL_HRTIM_TIM_SetDeadtimePrescaler(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}, HAL_HRTIM_DEADTIME_{{prescaler}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!(eq prescaler "DIV1")~}}
+{{#if (and mode (not (eq mode "COMPLEMENTARY")))}}
+  if (HAL_HRTIM_TIM_SetDeadtimeMode(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}, HAL_HRTIM_DEADTIME_{{mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!mode~}}
+{{#with rising_deadtime}}
+  deadtime_config.value = {{value}};
+  deadtime_config.sign = HAL_HRTIM_DEADTIME_{{sign}};
+
+  if (HAL_HRTIM_TIM_SetConfigDeadtime(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../../_foreignKey}}, HAL_HRTIM_DEADTIME_RISING, &deadtime_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#unless (eq lock "UNLOCKED")}}
+  if (HAL_HRTIM_TIM_LockDeadtime(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../../_foreignKey}}, HAL_HRTIM_DEADTIME_RISING, HAL_HRTIM_DEADTIME_LOCK_{{lock}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!(eq lock "UNLOCKED")~}}
+{{/with}}{{!rising_deadtime~}}
+{{#with falling_deadtime}}
+  deadtime_config.value = {{value}};
+  deadtime_config.sign = HAL_HRTIM_DEADTIME_{{sign}};
+
+  if (HAL_HRTIM_TIM_SetConfigDeadtime(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../../_foreignKey}}, HAL_HRTIM_DEADTIME_FALLING, &deadtime_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#unless (eq lock "UNLOCKED")}}
+  if (HAL_HRTIM_TIM_LockDeadtime(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../../_foreignKey}}, HAL_HRTIM_DEADTIME_FALLING, HAL_HRTIM_DEADTIME_LOCK_{{lock}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!(eq lock "UNLOCKED")~}}
+{{/with}}{{!falling_deadtime~}}
+{{#if enable}}
+  if (HAL_HRTIM_TIM_EnableDeadtime(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!enable~}}
+{{/with}}{{!config~}}
+{{/if}}{{!use~}}
+{{/with}}{{!deadtime~}}
+{{#with delayed_prot}}
+{{#if use}}
+{{#unless @root.IsDeclaredDelayedProtConfig}}
+{{assign 'IsDeclaredDelayedProtConfig' true}}
+  /* Configure delayed protection */
+  hal_hrtim_delayed_prot_config_t delayed_prot_config;
+
+{{/unless}}
+{{#with config}}
+  delayed_prot_config.mode = HAL_HRTIM_{{mode}};
+  delayed_prot_config.event = HAL_HRTIM_{{eev}};
+{{#if outputs}}
+  delayed_prot_config.outputs = HAL_HRTIM_TIM_{{outputs}};
+{{else}}
+  delayed_prot_config.outputs = HAL_HRTIM_TIM_OUT1_OUT2;
+{{/if}}
+
+  if (HAL_HRTIM_TIM_SetConfigDelayedProtection(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}, &delayed_prot_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#if enable}}
+  if (HAL_HRTIM_TIM_EnableDelayedProtection(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!enable~}}
+{{/with}}{{!config~}}
+{{/if}}{{!use~}}
+{{/with}}{{!delayed_prot~}}
+{{#with chopper_mode}}
+{{#if use}}
+{{#unless @root.IsDeclaredChopperConfig}}
+{{assign 'IsDeclaredChopperConfig' true}}
+  /* Chopper mode configuration */
+  hal_hrtim_chopper_config_t chopper_config;
+
+{{/unless}}
+{{#with config}}
+  chopper_config.prescaler = HAL_HRTIM_CHOPPER_{{prescaler}};
+  chopper_config.start_pulse_width = HAL_HRTIM_CHOPPER_{{start_pulse_width}};
+  chopper_config.duty_cycle = HAL_HRTIM_CHOPPER_{{duty_cycle}};
+
+  if (HAL_HRTIM_TIM_SetConfigChopper(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}, &chopper_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#unless (eq mode "DISABLED")}}
+  if (HAL_HRTIM_TIM_EnableChopper(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../../_foreignKey}}, HAL_HRTIM_TIM_{{mode}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!enable~}}
+{{/with}}{{!config~}}
+{{/if}}{{!use~}}
+{{/with}}{{!chopper_mode~}}
+{{#with fault_prot}}
+{{#if faults.length}}
+  /* Enable fault inputs */
+  if (HAL_HRTIM_TIM_EnableFault(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../_foreignKey}}, {{#each faults}}HAL_HRTIM_{{enable}}{{#unless @last}} \
+                                                          | {{/unless}}{{/each}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#if lock}}
+  if (HAL_HRTIM_TIM_LockFault(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../../../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!lock~}}
+{{/if}}{{!aults.length~}}
+{{/with}}{{!fault_prot~}}
+{{/with}}{{!output_stage~}}
+{{#if @root.IsEnabledPreload}}
+  /* Enable registers preload */
+  if (HAL_HRTIM_TIM_EnablePreload(&h{{@root.current_resource}}, HAL_HRTIM_{{helper_hrtim_convert_timer ../_foreignKey}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!@root.IsEnabledPreload~}}
+{{/with}}{{!timer_config~}}
+{{/if}}{{!use~}}
+{{/each}}{{!timers~}}
+{{/if}}{{!helper_hrtim_any_resource_used timers~}}
+{{/with}}{{!basic~}}
+{{#with additional}}
+{{#if global_interrupt_request_sources}}
+{{#if global_interrupt_request_sources.length}}
+  /* Configure global interrupts */
+  if (HAL_HRTIM_SetConfigInterrupts(&h{{@root.current_resource}}, HAL_HRTIM_INTERRUPT_COMMON, {{#each global_interrupt_request_sources}}HAL_HRTIM_OPT_IT_{{source}}{{#unless @last}} \
+                                                                          | {{/unless}}{{/each}}) != HAL_OK)
+  {
+    return NULL;
+  }
+{{/if}}
+{{/if}}{{!global_interrupt_request_sources~}}
+{{#with burst_mode}}
+{{#if use}}
+{{#with config}}
+  /* Burst mode controller configuration */
+  hal_hrtim_burst_mode_config_t burst_mode_config;
+
+  burst_mode_config.mode = HAL_HRTIM_BURST_MODE_{{mode}};
+  burst_mode_config.clock = HAL_HRTIM_BURST_MODE_CLK_{{helper_hrtim_convert_burst_mode_clock clock clock_source}};
+  burst_mode_config.prescaler = HAL_HRTIM_BURST_MODE_DIV{{prescaler}};
+  burst_mode_config.period = {{period}};
+  burst_mode_config.idle_periods = {{idle_periods}};
+{{#if triggers.length}}
+{{#if fixed_input.source}}
+  burst_mode_config.triggers = {{#each triggers}}HAL_HRTIM_BM_TRIGGER_{{helper_hrtim_convert_burst_mode_trigger source ../fixed_input.source}}{{#unless @last}} \
+                      | {{/unless}}{{/each}};
+{{else}}
+  burst_mode_config.triggers = {{#each triggers}}HAL_HRTIM_BM_TRIGGER_{{helper_hrtim_convert_burst_mode_trigger source 'ONCHIP'}}{{#unless @last}} \
+                      | {{/unless}}{{/each}};
+
+  if (HAL_HRTIM_SetBurstModeTriggerInput(&h{{@root.current_resource}}, HAL_HRTIM_BURST_MODE_TRIGGER_{{helper_hrtim_convert_source selectable_input.source}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{else}}
+  burst_mode_config.triggers = HAL_HRTIM_BM_TRIGGER_NONE;
+
+{{/if}}
+  if (HAL_HRTIM_SetConfigBurstMode(&h{{@root.current_resource}}, &burst_mode_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{#if preload}}
+  if (HAL_HRTIM_EnableBurstModePreload(&h{{@root.current_resource}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!preload~}}
+{{#if enable}}
+  if (HAL_HRTIM_EnableBurstMode(&h{{@root.current_resource}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}{{!enable~}}
+{{/with}}{{!config~}}
+{{/if}}{{!use~}}
+{{/with}}{{!burst_mode~}}
+{{#with adc_synchro}}
+{{#if (helper_hrtim_any_resource_used adc_triggers "use")}}
+   /* ADC synchronization configuration */
+   hal_hrtim_adc_sync_config_t adc_sync_config;
+
+{{#each adc_triggers}}
+{{#if use}}
+{{assign 'adc_trigger' 'HAL_HRTIM_ADC_TRIGGER1'~}}
+{{#with config}}
+{{#unless (eq postscaler 0)}}
+  if (HAL_HRTIM_SetADCPostscaler(&h{{@root.current_resource}}, {{helper_hrtim_convert_adc_trigger_id @root.current_layer ../_foreignKey}}, {{postscaler}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}{{!eq postscaler 0}}
+  adc_sync_config.update = HAL_HRTIM_{{update_source}};
+{{#if trigger_sources}}
+  adc_sync_config.source = {{#each trigger_sources}}{{helper_hrtim_convert_adc_trigger_source @root.current_layer ../../_foreignKey source}}{{#unless @last}} \
+                           | {{/unless}}{{/each}};
+{{else}}
+  adc_sync_config.source = {{helper_hrtim_convert_adc_trigger_source @root.current_layer ../_foreignKey trigger_source}};
+{{/if}}
+
+  if (HAL_HRTIM_SetADCSynchro(&h{{@root.current_resource}}, {{helper_hrtim_convert_adc_trigger_id @root.current_layer ../_foreignKey}}, &adc_sync_config) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/with}}{{!config~}}
+{{/if}}{{!use~}}
+{{/each}}{{!adc_triggers~}}
+{{#if pushpull_adc_trigger}}
+{{#unless (eq pushpull_adc_trigger.tima "OUT1_OUT2")}}
+  if (HAL_HRTIM_TIM_SetPushPullAdcTrigger(&h{{@root.current_resource}}, HAL_HRTIM_TIMA, HAL_HRTIM_PUSHPULL_ADC_{{pushpull_adc_trigger.tima}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}
+{{#unless (eq pushpull_adc_trigger.timb "OUT1_OUT2")}}
+  if (HAL_HRTIM_TIM_SetPushPullAdcTrigger(&h{{@root.current_resource}}, HAL_HRTIM_TIMB, HAL_HRTIM_PUSHPULL_ADC_{{pushpull_adc_trigger.timb}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}
+{{#unless (eq pushpull_adc_trigger.timc "OUT1_OUT2")}}
+  if (HAL_HRTIM_TIM_SetPushPullAdcTrigger(&h{{@root.current_resource}}, HAL_HRTIM_TIMC, HAL_HRTIM_PUSHPULL_ADC_{{pushpull_adc_trigger.timc}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}
+{{#unless (eq pushpull_adc_trigger.timd "OUT1_OUT2")}}
+  if (HAL_HRTIM_TIM_SetPushPullAdcTrigger(&h{{@root.current_resource}}, HAL_HRTIM_TIMD, HAL_HRTIM_PUSHPULL_ADC_{{pushpull_adc_trigger.timd}}) != HAL_OK)
+  {
+    return NULL;
+  }
+{{/unless}}
+{{#unless (eq pushpull_adc_trigger.time "OUT1_OUT2")}}
+  if (HAL_HRTIM_TIM_SetPushPullAdcTrigger(&h{{@root.current_resource}}, HAL_HRTIM_TIME, HAL_HRTIM_PUSHPULL_ADC_{{pushpull_adc_trigger.time}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}
+{{#unless (eq pushpull_adc_trigger.timf "OUT1_OUT2")}}
+  if (HAL_HRTIM_TIM_SetPushPullAdcTrigger(&h{{@root.current_resource}}, HAL_HRTIM_TIMF, HAL_HRTIM_PUSHPULL_ADC_{{pushpull_adc_trigger.timf}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/unless}}
+{{/if}}{{!pushpull_adc_trigger}}
+{{/if}}{{!helper_hrtim_any_resource_used adc_triggers~}}
+{{/with}}{{!adc_synchro~}}
+{{/with}}{{!additional~}}
+{{#with system}}
+{{assign 'hrtim_outputs' (helper_hrtim_get_gpio_selectors gpio 'output')~}}
+{{> GPIO_HAL fct='init_resource' resource=@root.current_resource selectors=@root.hrtim_outputs return_if_failed='NULL' init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+{{#with nvic}}
+{{#if enable_interruption_flt}}
+  /*  Enable fault interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_flt.needs @root.current_resource irq_handler_generation_flt)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_flt.needs}}
+
+{{/if}}
+{{#if enable_interruption_master}}
+  /*  Enable Master timer interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_master.needs @root.current_resource irq_handler_generation_master)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_master.needs}}
+
+{{/if}}
+{{#if enable_interruption_tima}}
+  /*  Enable Timer A interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_tima.needs @root.current_resource irq_handler_generation_tima)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_tima.needs}}
+
+{{/if}}
+{{#if enable_interruption_timb}}
+  /*  Enable Timer B interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_timb.needs @root.current_resource irq_handler_generation_timb)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_timb.needs}}
+
+{{/if}}
+{{#if enable_interruption_timc}}
+  /*  Enable Timer C interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_timc.needs @root.current_resource irq_handler_generation_timc)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_timc.needs}}
+
+{{/if}}
+{{#if enable_interruption_timd}}
+  /*  Enable Timer D interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_timd.needs @root.current_resource irq_handler_generation_timd)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_timd.needs}}
+
+{{/if}}
+{{#if enable_interruption_time}}
+  /*  Enable Timer E interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_time.needs @root.current_resource irq_handler_generation_time)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_time.needs}}
+
+{{/if}}
+{{#if enable_interruption_timf}}
+  /*  Enable Timer F interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_timf.needs @root.current_resource irq_handler_generation_timf)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_timf.needs}}
+
+{{/if}}
+{{/with}}{{! nvic ~}}
+{{#with dma}}
+{{#if enable_dma_master}}
+  /* Initialize the DMA channel assigned to the master timer */
+{{> DMA_HAL fct='init' needs=dma_config_master.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+  /* Link the master timer DMA channel handle to the {{@root.current_resource}} handle */
+  if (HAL_HRTIM_SetDMA(&h{{@root.current_resource}}, HAL_HRTIM_DMA_MASTER, &h{{@root.dma_channel_instance}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{#if enable_dma_tima}}
+  /* Initialize the DMA channel assigned to the timer A */
+{{> DMA_HAL fct='init' needs=dma_config_tima.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+  /* Link the timer A DMA channel handle to the {{@root.current_resource}} handle */
+  if (HAL_HRTIM_SetDMA(&h{{@root.current_resource}}, HAL_HRTIM_DMA_TIMA, &h{{@root.dma_channel_instance}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{#if enable_dma_timb}}
+  /* Initialize the DMA channel assigned to the timer B */
+{{> DMA_HAL fct='init' needs=dma_config_timb.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+  /* Link the timer B DMA channel handle to the {{@root.current_resource}} handle */
+  if (HAL_HRTIM_SetDMA(&h{{@root.current_resource}}, HAL_HRTIM_DMA_TIMB, &h{{@root.dma_channel_instance}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{#if enable_dma_timc}}
+  /* Initialize the DMA channel assigned to the timer C */
+{{> DMA_HAL fct='init' needs=dma_config_timc.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+  /* Link the timer C DMA channel handle to the {{@root.current_resource}} handle */
+  if (HAL_HRTIM_SetDMA(&h{{@root.current_resource}}, HAL_HRTIM_DMA_TIMC, &h{{@root.dma_channel_instance}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{#if enable_dma_timd}}
+  /* Initialize the DMA channel assigned to the timer D */
+{{> DMA_HAL fct='init' needs=dma_config_timd.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+  /* Link the timer D DMA channel handle to the {{@root.current_resource}} handle */
+  if (HAL_HRTIM_SetDMA(&h{{@root.current_resource}}, HAL_HRTIM_DMA_TIMD, &h{{@root.dma_channel_instance}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{#if enable_dma_time}}
+  /* Initialize the DMA channel assigned to the timer E */
+{{> DMA_HAL fct='init' needs=dma_config_time.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+  /* Link the timer E DMA channel handle to the {{@root.current_resource}} handle */
+  if (HAL_HRTIM_SetDMA(&h{{@root.current_resource}}, HAL_HRTIM_DMA_TIME, &h{{@root.dma_channel_instance}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{#if enable_dma_timf}}
+  /* Initialize the DMA channel assigned to the timer F */
+{{> DMA_HAL fct='init' needs=dma_config_timf.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+  /* Link the timer F DMA channel handle to the {{@root.current_resource}} handle */
+  if (HAL_HRTIM_SetDMA(&h{{@root.current_resource}}, HAL_HRTIM_DMA_TIMF, &h{{@root.dma_channel_instance}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{/with}}{{! dma ~}}
+{{/with}}{{! system}}
+
+  return &h{{@root.current_resource}};
+}
+
+void {{@root.fct_name}}_deinit(void)
+{
+{{#with system.nvic}}
+{{#if enable_interruption_flt}}
+  /* Disable fault interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_flt.needs}}
+
+{{/if}}
+{{#if enable_interruption_master}}
+  /* Disable Master timer interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_master.needs}}
+
+{{/if}}
+{{#if enable_interruption_tima}}
+  /* Disable Timer A interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_tima.needs}}
+
+{{/if}}
+{{#if enable_interruption_timb}}
+  /* Disable Timer B interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_timb.needs}}
+
+{{/if}}
+{{#if enable_interruption_timc}}
+  /* Disable Timer C interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_timc.needs}}
+
+{{/if}}
+{{#if enable_interruption_timd}}
+  /* Disable Timer d interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_timd.needs}}
+
+{{/if}}
+{{#if enable_interruption_time}}
+  /* Disable Timer E interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_time.needs}}
+
+{{/if}}
+{{#if enable_interruption_timf}}
+  /* Disable Timer F interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_timf.needs}}
+
+{{/if}}
+{{/with}}
+  (void)HAL_HRTIM_DeInit(&h{{@root.current_resource}});
+
+{{> RCC fct='generate_peripheral_clock_reset' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_peripheral_clock_deactivation' hw_resource=@root.current_resource}}
+{{> RCC fct='kernel_clock_deinit' hw_resource=@root.current_resource}}
+
+{{> GPIO_HAL fct='deinit_resource' resource=@root.current_resource}}
+{{#with system}}
+{{#with dma}}
+{{#if enable_dma_master}}
+{{> DMA_HAL fct='deinit' needs=dma_config_master.needs}}
+{{/if}}
+{{#if enable_dma_tima}}
+{{> DMA_HAL fct='deinit' needs=dma_config_tima.needs}}
+{{/if}}
+{{#if enable_dma_timb}}
+{{> DMA_HAL fct='deinit' needs=dma_config_timb.needs}}
+{{/if}}
+{{#if enable_dma_timc}}
+{{> DMA_HAL fct='deinit' needs=dma_config_timc.needs}}
+{{/if}}
+{{#if enable_dma_timd}}
+{{> DMA_HAL fct='deinit' needs=dma_config_timd.needs}}
+{{/if}}
+{{#if enable_dma_time}}
+{{> DMA_HAL fct='deinit' needs=dma_config_time.needs}}
+{{/if}}
+{{#if enable_dma_timf}}
+{{> DMA_HAL fct='deinit' needs=dma_config_timf.needs}}
+{{/if}}
+{{/with}}{{! dma ~}}
+{{/with}}{{! system ~}}
+}
+
+{{assign 'fct_name' (helper_common_get_generated_function_name @root.current_resource @root.current_layer undefined)~}}
+hal_hrtim_handle_t *{{@root.fct_name}}_gethandle(void)
+{
+  return &h{{@root.current_resource}};
+}
+
+{{> GPIO_HAL fct='gpio_exti_gethandle' resource=@root.current_resource type='implementation'}}
+{{else}}
+{{assign 'nvic_generate_handler' false~}}
+{{!
+    Generation of initialization function used in LL
+~}}
+HRTIM_TypeDef *{{@root.fct_name}}_init(void)
+{
+{{> RCC fct='generate_peripheral_clock_activation' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_kernel_clock' hw_resource=@root.current_resource sw_resource='HRTIM'}}
+{{#with system}}
+{{assign 'hrtim_inputs' (helper_hrtim_get_gpio_selectors gpio 'input')~}}
+{{> GPIO_LL fct='init_resource' resource=@root.current_resource selectors=@root.hrtim_inputs return_if_failed='NULL' init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+{{/with}}{{!system~}}
+{{helper_common_initialize_ll_code @root.optim_enable @root.lut_table @root.current_resource~}}
+{{#with channels}}
+{{#if (helper_hrtim_any_resource_used outputs "use_channel")}}
+  /* HRTIM output channels configuration */
+{{#each outputs}}
+{{#if use_channel}}
+{{helper_common_gen_ll_code_add_subinst (concat 'LL_HRTIM_OUTPUT_' _foreignKey)~}}
+{{~#with output_config}}
+{{#if set_crossbar.length}}
+{{assign 'set' (helper_hrtim_get_crossbar_configuration "LL_HRTIM_OUTPUTSET" set_crossbar ../_foreignKey)}}
+{{~else}}
+{{assign 'set' 'LL_HRTIM_OUTPUTSET_NONE'}}
+{{~/if}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_OUT_SetOutputSetSrc' (concat 'LL_HRTIM_OUTPUT_' ../_foreignKey) @root.set}}
+{{#if reset_crossbar.length}}
+{{assign 'reset' (helper_hrtim_get_crossbar_configuration "LL_HRTIM_OUTPUTRESET" reset_crossbar ../_foreignKey)}}
+{{~else}}
+{{assign 'reset' 'LL_HRTIM_OUTPUTRESET_NONE'}}
+{{~/if}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_OUT_SetOutputResetSrc' (concat 'LL_HRTIM_OUTPUT_' ../_foreignKey) @root.reset}}
+{{#if (eq polarity "HIGH")}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_OUT_SetPolarity' 'LL_HRTIM_OUT_POSITIVE_POLARITY'}}
+{{else}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_OUT_SetPolarity' 'LL_HRTIM_OUT_NEGATIVE_POLARITY'}}
+{{/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_OUT_SetIdleLevel' (concat 'LL_HRTIM_OUT_IDLELEVEL_' idle_level)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_OUT_SetFaultState' (concat 'LL_HRTIM_OUT_FAULTSTATE_' fault_level)}}
+{{/with}}{{!output_config}}
+{{~/if}}{{!use_channel}}
+{{~/each}}{{!outputs}}
+{{~/if}}{{!helper_hrtim_any_resource_used}}
+{{#if (helper_hrtim_any_resource_used external_events "use_channel")}}
+
+  /* HRTIM external events configuration */
+  {{helper_common_gen_ll_code 'LL_HRTIM_EE_SetPrescaler' (concat 'LL_HRTIM_EE_PRESCALER_DIV' ../additional.external_events_prescaler)}}
+{{~#each external_events}}
+{{#if use_channel}}
+{{helper_common_gen_ll_code_add_subinst (concat 'LL_HRTIM_' _foreignKey)~}}
+{{#with external_event_config}}
+{{assign 'src' (helper_hrtim_convert_source this.source.source)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetSrc' (concat 'LL_HRTIM_' ../_foreignKey 'SRC_' @root.src)}}
+{{#if (eq this.sensitivity 'LEVEL_HIGH')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetSensitivity' 'LL_HRTIM_EE_SENSITIVITY_LEVEL'}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetPolarity' 'LL_HRTIM_EE_POLARITY_HIGH'}}
+{{else}}
+{{#if (eq this.sensitivity 'LEVEL_LOW')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetSensitivity' 'LL_HRTIM_EE_SENSITIVITY_LEVEL'}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetPolarity' 'LL_HRTIM_EE_POLARITY_LOW'}}
+{{else}}
+{{~assign 'sns' (helper_hrtim_remove_substring this.sensitivity 'EDGE_')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetSensitivity' (concat 'LL_HRTIM_EE_SENSITIVITY_' @root.sns)}}
+{{/if}}
+{{/if}}
+{{#if (helper_hrtim_is_supported_event_feature ../_foreignKey 'FILTER')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetFilter' (concat 'LL_HRTIM_' this.filter)}}
+{{~/if}}
+{{#if (helper_hrtim_is_supported_event_feature ../_foreignKey 'FAST_MODE')}}
+{{#if (eq this.fast_mode false)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetFastMode' 'LL_HRTIM_EE_FASTMODE_DISABLE'}}
+{{~else}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EE_SetFastMode' 'LL_HRTIM_EE_FASTMODE_ENABLE'}}
+{{~/if}}
+{{~/if}}
+{{/with}}{{!external_event_config}}
+{{~/if}}{{!use_channel}}
+{{~/each}}{{!external_events}}
+{{~/if}}{{!helper_hrtim_any_resource_used}}
+{{#if (helper_hrtim_any_resource_used fault_inputs "use_channel")}}
+
+  /* HRTIM fault inputs configuration */
+  {{helper_common_gen_ll_code 'LL_HRTIM_FLT_SetPrescaler' (concat 'LL_HRTIM_FLT_PRESCALER_DIV' ../additional.fault_inputs_prescaler)}}
+{{~#each fault_inputs}}
+{{#if use_channel}}
+{{helper_common_gen_ll_code_add_subinst (concat 'LL_HRTIM_' _foreignKey)~}}
+{{#with fault_input_config}}
+{{~assign 'src' (helper_hrtim_convert_source this.source.source)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_SetSrc' (concat 'LL_HRTIM_' ../_foreignKey 'SRC_' @root.src)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_SetPolarity' (concat 'LL_HRTIM_FLT_POLARITY_' this.polarity)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_SetFilter' (concat 'LL_HRTIM_' this.filter)}}
+{{#if enable}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_Enable'}}
+{{~/if}}
+{{~/with}}{{!fault_input_config}}
+{{#if lock}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_Lock'}}
+{{/if}}
+{{#with blanking}}
+{{#unless (eq source 'NO_BLANKING')}}
+{{#if (eq source 'RESET_ALIGNED_BLANKING')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_SetBlankingSrc' 'LL_HRTIM_FLT_BLK_RSTALIGNED'}}
+{{else}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_SetBlankingSrc' 'LL_HRTIM_FLT_BLK_MOVING'}}
+{{/if}}
+{{#if enable}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_EnableBlanking'}}
+{{~/if}}
+{{~/unless}}
+{{~/with}}{{!blanking}}
+{{#with fault_counter}}
+{{#if use}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_SetCounterThreshold' threshold}}
+{{#if (eq reset_mode 'UNCONDITIONAL')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_SetResetMode' 'LL_HRTIM_FLT_COUNTERRST_UNCONDITIONAL'}}
+{{~else}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_FLT_SetResetMode' 'LL_HRTIM_FLT_COUNTERRST_CONDITIONAL'}}
+{{~/if}}
+{{~/if}}
+{{~/with}}{{!fault_counter}}
+{{~/if}}{{!use_channel}}
+{{~/each}}{{!fault_inputs}}
+{{~/if}}{{!helper_hrtim_any_resource_used}}
+{{#if ../additional.hsp_break_selection}}
+{{#if (eq @root.current_resource 'HRTIM1')}}
+{{assign 'sysflt_source' 'LL_HRTIM_SYSFLTSRC_HSP_BREAK0_PWM_SAFE' }}
+{{~else}}
+{{assign 'sysflt_source' 'LL_HRTIM_SYSFLTSRC_HSP_BREAK2_PWM_SAFE' }}
+{{/if}}
+  /* Connect HSP break output to system fault input */
+  {{helper_common_gen_ll_code 'LL_HRTIM_FLT_SetSysFaultSrc' @root.sysflt_source}}
+
+{{/if}}{{!../additional.hsp_break_selection~}}
+{{#if ../additional.syncin.use}}
+{{~assign 'src' (helper_hrtim_convert_source ../additional.syncin.source.source)}}
+  /* Synchronization input source selection */
+  {{helper_common_gen_ll_code 'LL_HRTIM_SetSyncInSrc' (concat 'LL_HRTIM_SYNCIN_SRC_' @root.src)}}
+
+{{/if}}{{!use~}}
+{{#if ../additional.syncout.use}}
+  /* Synchronization output configuration */
+  {{helper_common_gen_ll_code 'LL_HRTIM_SetSyncOutConfig' (concat 'LL_HRTIM_SYNCOUT_' ../additional.syncout.mode)}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_SetSyncOutSrc' (concat 'LL_HRTIM_SYNCOUT_SRC_' ../additional.syncout.source)}}
+
+{{/if}}{{!use~}}
+{{/with}}{{!channels~}}
+{{assign 'hrtim_dier_mask' (helper_hrtim_define_ll_hrtim_dier_mask additional.global_interrupt_request_sources)~}}
+{{#unless (eq @root.hrtim_dier_mask '')}}
+  /* Enable HRTIM global interrupts */
+  {{helper_common_gen_ll_code 'LL_HRTIM_EnableIT' @root.hrtim_dier_mask}}
+
+{{/unless}}
+{{#with basic}}
+{{#each timers}}
+{{#if use}}
+
+  /* {{_foreignKey}} configuration */
+{{~assign 'timer' (helper_hrtim_convert_timer _foreignKey)}}
+{{~assign 'up_down_mode' false~}}
+{{helper_common_gen_ll_code_add_subinst (concat 'LL_HRTIM_' @root.timer)~}}
+{{#with timer_config}}
+{{#if (eq ../_foreignKey 'Timer M')}}
+{{assign 'timer_dier_mask' (helper_hrtim_define_ll_master_timer_dier_mask interrupt_request_sources 'IE')~}}
+{{else}}
+{{assign 'timer_dier_mask' (helper_hrtim_define_ll_timx_dier_mask interrupt_request_sources 'IE')~}}
+{{/if}}
+{{#unless (eq @root.timer_dier_mask '')}}
+
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableIT' @root.timer_dier_mask}}
+{{/unless}}
+{{#if (eq ../_foreignKey 'Timer M')}}
+{{assign 'timer_dier_mask' (helper_hrtim_define_ll_master_timer_dier_mask dma_request_sources 'DE')~}}
+{{else}}
+{{assign 'timer_dier_mask' (helper_hrtim_define_ll_timx_dier_mask dma_request_sources 'DE')~}}
+{{/if}}
+{{#unless (eq @root.timer_dier_mask '')}}
+
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableDMAReq' @root.timer_dier_mask}}
+{{/unless}}
+{{~assign 'IsEnabledPreload' false}}
+{{#with time_base}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetPrescaler' (concat 'LL_HRTIM_PRESCALERRATIO_' prescaler)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetPeriod' period}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetRepetition' repetition}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetCounterMode' (concat 'LL_HRTIM_MODE_' operating_mode)}}
+{{#unless (eq @root.timer 'MASTER')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetCountingMode' (concat 'LL_HRTIM_COUNTING_MODE_' counting_mode)}}
+{{#if (eq counting_mode 'UP_DOWN')}}
+{{~assign 'up_down_mode' true}}
+{{~/if}}
+{{~/unless}}
+{{~/with}}{{!time_base~}}
+{{~#if preload}}
+{{~assign 'IsEnabledPreload' true}}
+{{~/if}}{{!preload}}
+{{#unless (eq synchronization 'DISABLED')}}
+{{~#if (or (eq synchronization 'RESET') (eq synchronization 'RESET_AND_TRIGGER'))}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableResetOnSync'}}
+{{/if}}
+{{~#if (or (eq synchronization 'TRIGGER') (eq synchronization 'RESET_AND_TRIGGER'))}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableStartOnSync'}}
+{{/if}}
+{{~/unless}}
+{{~#with update_management}}
+{{~#if update_sources}}
+  {{assign 'll_update_triggers' (helper_hrtim_format_ll_triggers_selection 'LL_HRTIM_UPDATETRIG_' update_sources 'source')~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetUpdateTrig' @root.ll_update_triggers}}
+{{/if}}
+  {{assign 'll_update_gating' (helper_hrtim_format_ll_update_gating update_gating update_enable_source.source)~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetUpdateGating' @root.ll_update_gating}}
+{{~#if @root.up_down_mode}}
+{{~assign 'll_roll_over_mode' (helper_hrtim_format_ll_roll_over_mode roll_over_mode.update)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetRollOverMode' @root.ll_roll_over_mode}}
+{{~assign 'll_roll_over_mode' (helper_hrtim_format_ll_roll_over_mode roll_over_mode.fault_and_event)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetFaultEventRollOverMode' @root.ll_roll_over_mode}}
+{{~assign 'll_roll_over_mode' (helper_hrtim_format_ll_roll_over_mode roll_over_mode.burst_mode)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetBMRollOverMode' @root.ll_roll_over_mode}}
+{{~assign 'll_roll_over_mode' (helper_hrtim_format_ll_roll_over_mode roll_over_mode.adc_trigger)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetADCRollOverMode' @root.ll_roll_over_mode}}
+{{~assign 'll_roll_over_mode' (helper_hrtim_format_ll_roll_over_mode roll_over_mode.output)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetOutputRollOverMode' @root.ll_roll_over_mode}}
+{{~/if}}
+{{#if update_resync}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableResyncUpdate'}}
+{{~/if}}
+{{~/with}}{{!update_management}}
+{{#unless (eq @root.timer 'MASTER')}}
+  {{assign 'll_reset_triggers' (helper_hrtim_format_ll_capture_or_reset_triggers_selection 'LL_HRTIM_RESETTRIG_' ../_foreignKey reset_triggers)~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetResetTrig' @root.ll_reset_triggers}}
+{{/unless}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetInterleavedMode' (concat 'LL_HRTIM_INTERLEAVED_MODE_' interleaved_mode)}}
+{{assign 'burst_mode_option' 'LL_HRTIM_BURSTMODE_MAINTAINCLOCK'~}}
+{{#if (eq burst_mode 'STOP_AND_RESET')}}
+{{assign 'burst_mode_option' 'LL_HRTIM_BURSTMODE_RESETCOUNTER'~}}
+{{/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetBurstModeOption' @root.burst_mode_option}}
+{{#unless (eq @root.timer 'MASTER')}}
+{{assign 'output1' (concat 'LL_HRTIM_OUTPUT_CH' (helper_hrtim_replace_substring ../_foreignKey 'Timer ' '') '1')~}}
+{{assign 'idle_mode' 'LL_HRTIM_OUT_NO_IDLE'~}}
+{{assign 'burst_entry_mode' 'LL_HRTIM_OUT_BM_ENTRYMODE_REGULAR'~}}
+{{#unless (eq output_stage.burst_mode.output1 'DISABLED')}}
+{{assign 'idle_mode' 'LL_HRTIM_OUT_IDLE_WHEN_BURST'~}}
+{{/unless}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_OUT_SetIdleMode' @root.output1 @root.idle_mode}}
+{{#if (eq output_stage.burst_mode.output1 'DELAYED')}}
+{{~assign 'burst_entry_mode' 'LL_HRTIM_OUT_BM_ENTRYMODE_DELAYED'~}}
+{{/if}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_OUT_SetBMEntryMode' @root.output1 @root.burst_entry_mode}}
+{{assign 'output2' (concat 'LL_HRTIM_OUTPUT_CH' (helper_hrtim_replace_substring ../_foreignKey 'Timer ' '') '2')~}}
+{{assign 'idle_mode' 'LL_HRTIM_OUT_NO_IDLE'~}}
+{{assign 'burst_entry_mode' 'LL_HRTIM_OUT_BM_ENTRYMODE_REGULAR'~}}
+{{#unless (eq output_stage.burst_mode.output2 'DISABLED')}}
+{{assign 'idle_mode' 'LL_HRTIM_OUT_IDLE_WHEN_BURST'~}}
+{{/unless}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_OUT_SetIdleMode' @root.output2  @root.idle_mode}}
+{{#if (eq output_stage.burst_mode.output2 'DELAYED')}}
+{{assign 'burst_entry_mode' 'LL_HRTIM_OUT_BM_ENTRYMODE_DELAYED'~}}
+{{/if}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_OUT_SetBMEntryMode' @root.output2 @root.burst_entry_mode}}
+{{/unless}}
+{{#each compare_units}}
+{{assign 'compare_unit' (helper_hrtim_extract_unit_number _foreignKey)~}}
+{{#unless (eq greater_than_comparison_mode undefined)}}
+{{#if (eq @root.compare_unit '1')}}
+{{#if greater_than_comparison_mode}}
+{{assign 'gtmode' 'LL_HRTIM_GTCMP1_GREATER'~}}
+{{else}}
+{{assign 'gtmode' 'LL_HRTIM_GTCMP1_EQUAL'~}}
+{{/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetComp1Mode' @root.gtmode}}
+{{else if (eq @root.compare_unit '3')}}
+{{#if greater_than_comparison_mode}}
+{{assign 'gtmode' 'LL_HRTIM_GTCMP3_GREATER'~}}
+{{else}}
+{{assign 'gtmode' 'LL_HRTIM_GTCMP3_EQUAL'~}}
+{{/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetComp3Mode' @root.gtmode}}
+{{/if}}
+{{/unless}}{{!greater_than_comparison_mode undefined ~}}
+{{#if triggered_half_mode}}
+{{#if (eq @root.compare_unit '2')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetTriggeredHalfMode' (concat 'LL_HRTIM_TRIGHALF_' triggered_half_mode)}}
+{{/if}}
+{{/if}}{{!triggered_half_mode ~}}
+{{#if auto_delayed_mode}}
+{{#if (or (eq @root.compare_unit '2') (eq @root.compare_unit '4'))}}
+  {{assign 'll_auto_delayed_mode' (helper_hrtim_format_ll_auto_delayed_mode auto_delayed_mode)~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetCompareMode' (concat 'LL_HRTIM_COMPARE_UNIT_' @root.compare_unit) @root.ll_auto_delayed_mode}}
+{{#if (eq auto_delayed_mode 'TIMEOUT_CMP1')}}
+{{assign 'auto_delayed_cmp1' true}}
+{{assign 'cmp1_value' timeout}}
+{{else if (eq auto_delayed_mode 'TIMEOUT_CMP3')}}
+{{assign 'auto_delayed_cmp3' true}}
+{{assign 'cmp3_value' timeout}}
+{{/if}}
+{{/if~}}
+{{/if}}{{!auto_delayed_mode ~}}
+{{/each}}{{!compare_units ~}}
+{{#each compare_units }}
+{{assign 'compare_unit' (helper_hrtim_extract_unit_number _foreignKey)}}
+{{~assign 'cmp' compare_value}}
+{{~#if (and (eq @root.compare_unit '1') (eq @root.auto_delayed_cmp1 true))}}
+{{assign 'cmp' @root.cmp1_value}}
+{{~else if (and (eq @root.compare_unit '3') (eq @root.auto_delayed_cmp3 true))}}
+{{assign 'cmp' @root.cmp3_value}}
+{{~/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetCompareValue' (concat 'LL_HRTIM_COMPARE_UNIT_' @root.compare_unit) @root.cmp}}
+{{/each}}{{!compare_units ~}}
+{{#each capture_units}}
+{{~assign 'capture_unit' (helper_hrtim_extract_unit_number _foreignKey)}}
+{{~assign 'll_capture_triggers' (helper_hrtim_format_ll_capture_or_reset_triggers_selection 'LL_HRTIM_CAPTURETRIG_'../../_foreignKey triggers)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetCaptureTrig' (concat 'LL_HRTIM_CAPTURE_UNIT_' @root.capture_unit) @root.ll_capture_triggers}}
+{{~/each}}{{!capture_units}}
+{{~#with output_stage}}
+{{#if push_pull_mode}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnablePushPullMode'}}
+{{~/if}}
+{{#if swap_mode}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_EnableSwapOutputs'}}
+{{~/if}}
+{{~#with deadtime}}
+{{#if use}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_SetPrescaler' (concat 'LL_HRTIM_DT_PRESCALER_' config.prescaler)}}
+{{#if config.mode}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_SetMode' (concat 'LL_HRTIM_DT_MODE_' config.mode)}}
+{{/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_SetRisingValue' config.rising_deadtime.value}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_SetRisingSign' (concat 'LL_HRTIM_DT_RISING_' config.rising_deadtime.sign)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_SetFallingValue' config.falling_deadtime.value}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_SetFallingSign' (concat 'LL_HRTIM_DT_FALLING_' config.falling_deadtime.sign)}}
+{{#unless (eq config.rising_deadtime.lock 'UNLOCKED')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_LockRising'}}
+{{#if (eq config.rising_deadtime.lock 'SIGN_AND_VALUE')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_LockRisingSign'}}
+{{/if}}
+{{/unless}}
+{{#unless (eq config.falling_deadtime.lock 'UNLOCKED')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_LockFalling'}}
+{{#if (eq config.falling_deadtime.lock 'SIGN_AND_VALUE')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_DT_LockFallingSign'}}
+{{/if}}
+{{/unless}}
+{{#if config.enable}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableDeadTime'}}
+{{~/if}}
+{{~/if}}
+{{~/with}}{{!deadtime}}
+{{~#with delayed_prot}}
+{{#if use}}
+{{~assign 'delayed_protection_mode' (helper_hrtim_format_ll_delayed_protection_mode config.mode  config.outputs config.eev)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetDLYPRTMode' @root.delayed_protection_mode}}
+{{#if (eq config.mode 'BALANCED_IDLE_AUTO_RESUME')}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableBIAR'}}
+{{~/if}}
+{{#if config.enable}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableDLYPRT'}}
+{{~/if}}
+{{~/if~}}
+{{~/with}}{{!delayed_prot}}
+{{~#with chopper_mode}}
+{{#if use}}
+{{~assign 'chp1' 'LL_HRTIM_OUT_CHOPPERMODE_DISABLE'}}
+{{~assign 'chp2' 'LL_HRTIM_OUT_CHOPPERMODE_DISABLE'}}
+{{~assign 'output1' (concat 'LL_HRTIM_OUTPUT_CH' (helper_hrtim_replace_substring ../../../_foreignKey 'Timer ' '') '1')}}
+{{~assign 'output2' (concat 'LL_HRTIM_OUTPUT_CH' (helper_hrtim_replace_substring ../../../_foreignKey 'Timer ' '') '2')}}
+{{~assign 'dty' (helper_hrtim_replace_substring config.duty_cycle 'DTY' 'LL_HRTIM_CHP_DUTYCYCLE_')}}
+{{~assign 'strtpw' (helper_hrtim_replace_substring config.start_pulse_width 'MUL' 'LL_HRTIM_CHP_PULSEWIDTH_')}}
+{{#if (or (eq config.mode 'OUT1') (eq config.mode 'OUT1_OUT2'))}}
+{{~assign 'chp1' 'LL_HRTIM_OUT_CHOPPERMODE_ENABLE'}}
+{{~/if}}
+{{#if (or (eq config.mode 'OUT2') (eq config.mode 'OUT1_OUT2'))}}
+{{~assign 'chp2' 'LL_HRTIM_OUT_CHOPPERMODE_ENABLE'}}
+{{~/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CHP_SetPrescaler' (concat 'LL_HRTIM_CHP_PRESCALER_' config.prescaler)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CHP_SetDutyCycle' @root.dty}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CHP_SetPulseWidth' @root.strtpw}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_OUT_SetChopperMode' @root.output1 @root.chp1}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_OUT_SetChopperMode' @root.output2 @root.chp2}}
+{{~/if}}
+{{~/with}}{{!chopper_mode}}
+{{~#with fault_prot}}
+{{#if faults.length}}
+{{~assign 'faults' (helper_hrtim_format_ll_faults_selection faults)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableFault' @root.faults}}
+{{/if}}
+{{#if lock}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_LockFault'}}
+{{~/if}}
+{{~/with}}{{!fault_prot}}
+{{~/with}}{{!output_stage}}
+{{~#with external_events_config}}
+{{#each external_events}}
+{{~assign 'eev_filter' 'LL_HRTIM_NO_FILTERING'}}
+{{#unless (eq eev_filter_config.mode 'NO_FILTERING')}}
+{{#if (eq eev_filter_config.mode 'BLANKING')}}
+{{~assign 'eev_filter' (concat 'LL_HRTIM_' (helper_hrtim_convert_event_filter ../../../_foreignKey 'TIMFLTR' eev_filter_config.blanking))}}
+{{~else}}
+{{~assign 'eev_filter' (concat 'LL_HRTIM_' (helper_hrtim_convert_event_filter ../../../_foreignKey 'TIMWIN' eev_filter_config.windowing))}}
+{{~/if}}
+{{~/unless}}
+{{#if eev_filter_config.notification}}
+{{~assign 'eev_latch' 'LL_HRTIM_EELATCH_ENABLE'}}
+{{~else}}
+{{~assign 'eev_latch' 'LL_HRTIM_EELATCH_DISABLE'}}
+{{~/if}}
+{{#if source}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetCombinedEventSrc' (concat 'LL_HRTIM_' eev) (concat 'LL_HRTIM_' eev '_SRC_' (helper_hrtim_get_combined_event_source_value eev source))}}
+{{/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetEventFilter' (concat 'LL_HRTIM_' eev) @root.eev_filter}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetEventLatchStatus' (concat 'LL_HRTIM_' eev)  @root.eev_latch}}
+{{~/each}}
+{{#each event_counters}}
+{{~assign 'eev_counter' (concat 'LL_HRTIM_EE_COUNTER_' event_counter)}}
+{{~assign 'eev_counter_reset_mode' 'LL_HRTIM_EE_COUNTER_RSTMODE_UNCONDITIONAL'}}
+{{#if (eq reset_mode 'CUMULATIVE')}}
+{{~assign 'eev_counter_reset_mode' 'LL_HRTIM_EE_COUNTER_RSTMODE_CONDITIONAL'}}
+{{~/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetEventCounterThreshold' @root.eev_counter threshold}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetEventCounterResetMode' @root.eev_counter @root.eev_counter_reset_mode}}
+  {{assign 'eev_counter_source' (concat 'LL_HRTIM_' source)~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetEventCounterSource' @root.eev_counter @root.eev_counter_source}}
+{{#if enable}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableEventCounter' @root.eev_counter}}
+{{~/if}}
+{{~/each}}
+{{~/with}}{{!external_events_config}}
+{{~#if dac_triggers}}
+{{~assign 'dac_trigger_output' 'LL_HRTIM_DACTRIG_NONE'}}
+{{#unless (eq dac_triggers.dac_trigger_output 0)}}
+{{~assign 'dac_trigger_output' (concat 'LL_HRTIM_DACTRIG_DACTRIGOUT' dac_triggers.dac_trigger_output)~}}
+{{/unless}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetDACTrig' @root.dac_trigger_output}}
+{{~#unless (or (eq @root.timer 'MASTER') (eq dac_triggers.dual_channel_dac 'DISABLED'))}}
+{{~assign 'dual_channel_dac_step_trigger' (helper_hrtim_convert_dual_channel_dac_trigger 'STEP' dac_triggers.dual_channel_dac)}}
+{{~assign 'dual_channel_dac_reset_trigger' (helper_hrtim_convert_dual_channel_dac_trigger 'RESET' dac_triggers.dual_channel_dac)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetDualDacStepTrigger' (concat 'LL_HRTIM_DCDS_' @root.dual_channel_dac_step_trigger)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetDualDacResetTrigger' (concat 'LL_HRTIM_DCDR_' @root.dual_channel_dac_reset_trigger)}}
+{{#if dac_triggers.enable}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnableDualDacTrigger'}}
+{{~/if}}
+{{~/unless}}
+{{~/if}}{{!dac_triggers~}}
+{{~#with crossbar_override}}
+{{#if use}}
+{{~#with config}}
+{{~assign 'is_configured_delay1' false}}
+{{~assign 'is_configured_delay2' false}}
+{{~assign 'co_triggers_internal' (helper_hrtim_format_ll_triggers_selection 'LL_HRTIM_CO_TRIG_' triggers 'source')}}
+{{#if external_triggers.length}}
+{{~assign 'co_triggers_external' (helper_hrtim_format_ll_triggers_selection 'LL_HRTIM_CO_TRIG_' external_triggers 'source')}}
+{{~assign "co_triggers" (concat @root.co_triggers_internal " | " @root.co_triggers_external)}}
+{{else}}
+{{~assign "co_triggers" @root.co_triggers_internal}}
+{{~/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CO_SetMode' (concat 'LL_HRTIM_CO_MODE_' mode)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CO_SetTrig' @root.co_triggers}}
+{{~#each force_mode_config}}
+{{~assign 'output' (concat 'LL_HRTIM_OUTPUT_CH' (helper_hrtim_replace_substring ../../../../_foreignKey 'Timer ' '') (helper_hrtim_replace_substring _foreignKey 'Output' ''))}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_CO_SetForceMode' @root.output (concat 'LL_HRTIM_CO_FORCEMODE_' force_mode)}}
+{{~#if (eq force_mode 'EVENT')}}
+{{~assign 'co_forcing_events' (helper_hrtim_format_ll_triggers_selection 'LL_HRTIM_CO_FORCEON_' forcing_events 'source')}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_CO_SetForcingEvents' @root.output @root.co_forcing_events}}
+{{~/if}}
+{{~/each}}
+{{~#each force_mode_config}}
+{{#if (or (eq force_mode 'DELAY1') (eq force_mode 'DELAY2'))}}
+{{#if (and (not @root.is_configured_delay1) (eq force_mode 'DELAY1'))}}
+{{~assign 'is_configured_delay1' true}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CO_SetDelay' (concat 'LL_HRTIM_CO_FORCEMODE_' force_mode) delay}}
+{{/if}}
+{{#if (and (not @root.is_configured_delay2) (eq force_mode 'DELAY2'))}}
+{{~assign 'is_configured_delay2' true}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CO_SetDelay' (concat 'LL_HRTIM_CO_FORCEMODE_' force_mode) delay}}
+{{/if}}
+{{/if}}
+{{/each}}
+{{#if enable}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CO_Enable'}}
+{{/if}}
+{{#if enable_dual_channel_dac}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_CO_EnableDualChannelDac'}}
+{{~/if}}
+{{~/with}}
+{{~/if}}
+{{~/with}}{{!crossbar_override}}
+{{#if @root.IsEnabledPreload}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_EnablePreload'}}
+{{~/if}}{{!@root.IsEnabledPreload}}
+{{~/with}}{{!timer_config}}
+{{/if}}{{!use}}
+{{~/each}}{{!timers}}
+{{/with}}{{!basic}}
+{{~#with additional.burst_mode}}
+{{#if use}}
+  /* Burst mode controller configuration */
+{{~#with config}}
+{{~assign 'bmclk' (helper_hrtim_convert_burst_mode_clock clock clock_source)}}
+{{~assign 'bm_triggers' (helper_hrtim_format_ll_triggers_selection 'LL_HRTIM_BM_TRIG_' triggers 'source')}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_SetMode' (concat 'LL_HRTIM_BM_MODE_' mode)}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_SetClockSrc'(concat 'LL_HRTIM_BM_CLKSRC_' @root.bmclk)}}
+{{#if (eq clock 'HRTIM')}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_SetPrescaler'(concat 'LL_HRTIM_BM_PRESCALER_DIV' prescaler)}}
+{{/if}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_SetPeriod' period}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_SetCompare' idle_periods}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_SetTrig' @root.bm_triggers}}
+{{~#if selectable_input}}
+{{~assign 'input_source' (concat 'LL_HRTIM_BM_TRIG_SRC_' (helper_hrtim_convert_source selectable_input.source))}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_SetTrigInputSrc' @root.input_source}}
+{{~/if}}
+{{#if enable}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_Enable'}}
+{{/if}}
+{{#if preload}}
+  {{helper_common_gen_ll_code 'LL_HRTIM_BM_EnablePreload'}}
+{{~/if}}
+{{~/with}}
+{{~/if}}
+{{~/with}}{{!additional.burst_mode}}
+{{#with additional.adc_synchro}}
+{{#if (helper_hrtim_any_resource_used adc_triggers "use")}}
+
+  /* ADC triggers configuration */
+{{~/if}}
+{{~#each adc_triggers}}
+{{#if use}}
+{{helper_common_gen_ll_code_add_subinst (helper_hrtim_convert_adc_trigger_id @root.current_layer _foreignKey)}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_SetADCPostScaler' config.postscaler}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_SetADCTrigUpdate' (concat 'LL_HRTIM_ADCTRIG_UPDATE_' config.update_source)}}
+{{#if config.trigger_source}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_SetADCTrigSrc' (helper_hrtim_convert_adc_trigger_source @root.current_layer _foreignKey config.trigger_source)}}
+{{~else}}
+{{assign 'adc_triggers' (helper_hrtim_format_ll_triggers_selection 'LL_HRTIM_ADCTRIG_SRC13_' config.trigger_sources 'source')}}
+{{~#if (or (eq _foreignKey 'ADC trigger 2') (eq _foreignKey 'ADC trigger 4'))}}
+{{assign 'adc_triggers' (helper_hrtim_format_ll_triggers_selection 'LL_HRTIM_ADCTRIG_SRC24_' config.trigger_sources 'source')}}
+{{~/if}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_SetADCTrigSrc' @root.adc_triggers}}
+{{~/if}}
+{{/if}}
+{{/each}}{{!adc_triggers}}
+{{~/with}}{{!additional.adc_synchro}}
+{{#with basic}}
+{{#each timers}}
+{{#if (and use timer_config.output_stage.push_pull_mode)}}
+{{#if (eq _foreignKey 'Timer A')}}
+{{assign 'tima_in_push_pull_mode' true}}
+{{~/if}}
+{{#if (eq _foreignKey 'Timer B')}}
+{{assign 'timb_in_push_pull_mode' true}}
+{{~/if}}
+{{#if (eq _foreignKey 'Timer C')}}
+{{assign 'timc_in_push_pull_mode' true}}
+{{~/if}}
+{{#if (eq _foreignKey 'Timer D')}}
+{{assign 'timd_in_push_pull_mode' true}}
+{{~/if}}
+{{#if (eq _foreignKey 'Timer E')}}
+{{assign 'time_in_push_pull_mode' true}}
+{{~/if}}
+{{#if (eq _foreignKey 'Timer F')}}
+{{assign 'timf_in_push_pull_mode' true}}
+{{~/if}}
+{{/if}}
+{{/each}}
+{{/with}}
+{{#with additional.adc_synchro}}
+{{#if (helper_hrtim_any_resource_used adc_triggers "use")}}
+{{#with pushpull_adc_trigger}}
+{{#if @root.tima_in_push_pull_mode}}
+  {{helper_common_gen_ll_code_add_subinst 'LL_HRTIM_TIMA'~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetADCTrigMode' (concat 'LL_HRTIM_ADCTRIG_' tima)}}
+{{/if}}
+{{#if @root.timb_in_push_pull_mode}}
+  {{helper_common_gen_ll_code_add_subinst 'LL_HRTIM_TIMB'~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetADCTrigMode' (concat 'LL_HRTIM_ADCTRIG_' timb)}}
+{{/if}}
+{{#if @root.timc_in_push_pull_mode}}
+  {{helper_common_gen_ll_code_add_subinst 'LL_HRTIM_TIMC'~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetADCTrigMode' (concat 'LL_HRTIM_ADCTRIG_' timc)}}
+{{/if}}
+{{#if @root.timd_in_push_pull_mode}}
+  {{helper_common_gen_ll_code_add_subinst 'LL_HRTIM_TIMD'~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetADCTrigMode' (concat 'LL_HRTIM_ADCTRIG_' timd)}}
+{{/if}}
+{{#if @root.time_in_push_pull_mode}}
+  {{helper_common_gen_ll_code_add_subinst 'LL_HRTIM_TIME'~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetADCTrigMode' (concat 'LL_HRTIM_ADCTRIG_' time)}}
+{{/if}}
+{{#if @root.timf_in_push_pull_mode}}
+  {{helper_common_gen_ll_code_add_subinst 'LL_HRTIM_TIMF'~}}
+  {{helper_common_gen_ll_code_subinst 'LL_HRTIM_TIM_SetADCTrigMode' (concat 'LL_HRTIM_ADCTRIG_' timf)}}
+{{/if}}
+{{/with}}
+{{/if}}
+{{/with}}
+{{#with system}}
+{{assign 'hrtim_outputs' (helper_hrtim_get_gpio_selectors gpio 'output')~}}
+{{> GPIO_LL fct='init_resource' resource=@root.current_resource selectors=@root.hrtim_outputs return_if_failed='NULL' init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+{{#with nvic}}
+{{#if enable_interruption_flt}}
+  /* Enable HRTIM fault interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_flt.needs @root.current_resource irq_handler_generation_flt)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_flt.needs}}
+{{/if}}
+{{#if enable_interruption_master}}
+  /* Enable master timer interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_master.needs @root.current_resource irq_handler_generation_master)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_master.needs}}
+{{/if}}
+{{#if enable_interruption_tima}}
+  /* Enable timer A interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_tima.needs @root.current_resource irq_handler_generation_tima)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_tima.needs}}
+{{/if}}
+{{#if enable_interruption_timb}}
+  /* Enable timer B interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_timb.needs @root.current_resource irq_handler_generation_timb)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_timb.needs}}
+{{/if}}
+{{#if enable_interruption_timc}}
+  /* Enable timer C interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_timc.needs @root.current_resource irq_handler_generation_timc)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_timc.needs}}
+{{/if}}
+{{#if enable_interruption_timd}}
+  /* Enable timer D interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_timd.needs @root.current_resource irq_handler_generation_timd)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_timd.needs}}
+{{/if}}
+{{#if enable_interruption_time}}
+  /* Enable timer E interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_time.needs @root.current_resource irq_handler_generation_time)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_time.needs}}
+{{/if}}
+{{#if enable_interruption_timf}}
+  /* Enable timer F interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config_timf.needs @root.current_resource irq_handler_generation_timf)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config_timf.needs}}
+{{/if}}
+{{/with}}{{! nvic}}
+{{#with dma}}
+{{#if enable_dma_master}}
+{{> DMA_LL fct='init' needs=dma_config_master.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{#if enable_dma_tima}}
+{{> DMA_LL fct='init' needs=dma_config_tima.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{#if enable_dma_timb}}
+{{> DMA_LL fct='init' needs=dma_config_timb.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{#if enable_dma_timc}}
+{{> DMA_LL fct='init' needs=dma_config_timc.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{#if enable_dma_time}}
+{{> DMA_LL fct='init' needs=dma_config_time.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{#if enable_dma_timd}}
+{{> DMA_LL fct='init' needs=dma_config_timd.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{#if enable_dma_time}}
+{{> DMA_LL fct='init' needs=dma_config_time.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{#if enable_dma_timf}}
+{{> DMA_LL fct='init' needs=dma_config_timf.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{/with}}{{! dma}}
+{{/with}}{{! system}}
+
+  return {{@root.current_resource}};
+}
+
+void {{@root.fct_name}}_deinit(void)
+{
+{{> RCC fct='generate_peripheral_clock_deactivation' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_peripheral_clock_reset' hw_resource=@root.current_resource}}
+{{> RCC fct='kernel_clock_deinit' hw_resource=@root.current_resource}}
+{{> GPIO_LL fct='deinit_resource' resource=@root.current_resource}}
+{{#with system}}
+{{#with nvic}}
+{{#if enable_interruption_flt}}
+
+  /* Disable HRTIM fault interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_flt.needs}}
+{{/if}}
+{{#if enable_interruption_master}}
+
+  /* Disable master timer interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_master.needs}}
+{{/if}}
+{{#if enable_interruption_tima}}
+
+  /* Disable timer A interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_tima.needs}}
+{{/if}}
+{{#if enable_interruption_timb}}
+
+  /* Disable timer B interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_timb.needs}}
+{{/if}}
+{{#if enable_interruption_timc}}
+
+  /* Disable timer C interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_timc.needs}}
+{{/if}}
+{{#if enable_interruption_timd}}
+
+  /* Disable timer D interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_timd.needs}}
+{{/if}}
+{{#if enable_interruption_time}}
+
+  /* Disable timer E interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_time.needs}}
+{{/if}}
+{{#if enable_interruption_timf}}
+
+  /* Disable timer F interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=nvic_config_timf.needs}}
+{{/if}}
+{{/with}}{{! nvic}}
+{{#with dma}}
+{{#if enable_dma_master}}
+{{> DMA_LL fct='deinit' layer=@root.current_layer needs=dma_config_master.needs}}
+{{/if}}
+{{#if enable_dma_tima}}
+{{> DMA_LL fct='deinit' layer=@root.current_layer needs=dma_config_tima.needs}}
+{{/if}}
+{{#if enable_dma_timb}}
+{{> DMA_LL fct='deinit' layer=@root.current_layer needs=dma_config_timb.needs}}
+{{/if}}
+{{#if enable_dma_timc}}
+{{> DMA_LL fct='deinit' layer=@root.current_layer needs=dma_config_timc.needs}}
+{{/if}}
+{{#if enable_dma_time}}
+{{> DMA_LL fct='deinit' layer=@root.current_layer needs=dma_config_time.needs}}
+{{/if}}
+{{#if enable_dma_timd}}
+{{> DMA_LL fct='deinit' layer=@root.current_layer needs=dma_config_timd.needs}}
+{{/if}}
+{{#if enable_dma_time}}
+{{> DMA_LL fct='deinit' layer=@root.current_layer needs=dma_config_time.needs}}
+{{/if}}
+{{#if enable_dma_timf}}
+{{> DMA_LL fct='deinit' layer=@root.current_layer needs=dma_config_timf.needs}}
+{{/if}}
+{{/with}}{{! dma}}
+{{/with}}{{! system}}
+}
+
+{{> DMA_LL fct='get_dma_lli_reg' resource=@root.dma_resource strategy=@root.strategy type='implementation'}}
+{{/if}}{{!HAL}}
+{{#with security_privilege}}
+  {{~assign 'getCurrentEngine' (@root.SwComposerAPI.getCurrentEngine)~}}
+  {{#if (eq @root.getCurrentEngine.secure 'Non-secure')}}
+system_status_t {{@root.fct_name}}_config_privilege(void)
+  {{else}}
+system_status_t {{@root.fct_name}}_config_security_privilege(void)
+  {{/if}}
+{
+{{#> RIF fct='rif_config_security' layer=@root.current_layer resource=@root.current_resource}}{{/RIF}}
+
+{{#if (eq @root.current_layer 'HAL')~}}
+{{#> DMA_HAL fct='dma_config_security' resource=@root.current_resource}}{{/DMA_HAL}}
+{{#> GPIO_HAL fct='gpio_config_security' resource=@root.current_resource}}{{/GPIO_HAL}}
+{{else}}
+{{#> DMA_LL fct='dma_config_security' resource=@root.current_resource}}{{/DMA_LL}}
+{{#> GPIO_LL fct='gpio_config_security' resource=@root.current_resource}}{{/GPIO_LL}}
+{{/if}}
+  return SYSTEM_OK;
+}
+{{/with}}{{!security_privilege}}
+{{#with system}}
+{{#if (eq @root.current_layer 'HAL')}}
+{{> GPIO_HAL fct='init_resource_independently' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{#with dma}}
+{{#if enable_dma_master}}
+{{> DMA_HAL fct='init_independently' needs=dma_config_master.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_tima}}
+{{> DMA_HAL fct='init_independently' needs=dma_config_tima.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_timb}}
+{{> DMA_HAL fct='init_independently' needs=dma_config_timb.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_timc}}
+{{> DMA_HAL fct='init_independently' needs=dma_config_timc.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_timd}}
+{{> DMA_HAL fct='init_independently' needs=dma_config_timd.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_time}}
+{{> DMA_HAL fct='init_independently' needs=dma_config_time.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_timf}}
+{{> DMA_HAL fct='init_independently' needs=dma_config_timf.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{/with}}{{! dma ~}}
+{{else}}
+{{> GPIO_LL fct='init_resource_independently' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{#with dma}}
+{{#if enable_dma_master}}
+{{> DMA_LL fct='init_independently' needs=dma_config_master.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_tima}}
+{{> DMA_LL fct='init_independently' needs=dma_config_tima.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_timb}}
+{{> DMA_LL fct='init_independently' needs=dma_config_timb.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_timc}}
+{{> DMA_LL fct='init_independently' needs=dma_config_timc.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_timd}}
+{{> DMA_LL fct='init_independently' needs=dma_config_timd.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_time}}
+{{> DMA_LL fct='init_independently' needs=dma_config_time.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{#if enable_dma_timf}}
+{{> DMA_LL fct='init_independently' needs=dma_config_timf.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+
+{{/if}}
+{{/with}}{{!dma ~}}
+{{/if}}
+{{/with}}{{!system}}
+{{/with}}{{hrtim_cxt}}
+{{/each}}{{!instances}}
+{{assign 'irq_info_list' (helper_cortex_nvic_get_irqline_info_list @root.NvicAPI @root.nvic_context 'HRTIM')~}}
+{{#each @root.irq_info_list}}
+{{#if generate_handler}}
+/******************************************************************************/
+/* {{description}} */
+/******************************************************************************/
+void {{line}}_IRQHandler(void)
+{
+  HAL_{{component}}{{irq_suffix}}_IRQHandler(&h{{resource_hw}});
+}
+{{else}}
+/******************************************************************************/
+/* {{description}} is managed directly in user code. */
+/*
+void {{line}}_IRQHandler(void)
+{
+}
+*/
+/******************************************************************************/
+
+{{/if}}
+{{/each}}
+{{/helper_common_beautifier}}

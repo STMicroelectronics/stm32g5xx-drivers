@@ -1,0 +1,1060 @@
+{{~log "RCC_partial generation started"~}}
+{{~helper_rcc_init_codegen @root~}}
+{{!
+  * @file Partial provided by RCC used locally
+  * @license
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * @detail
+  * The partial provides the following functions:
+  * - periph_configs: called in mx_rcc_template.c.hbs
+  * - periph_deactivate: called in mx_rcc_template.c.hbs
+  * - generate_clock_source_info
+  * - generate_enable_osc_with_checks
+  * - generate_enable_osc
+  * - generate_enable_hsi
+  * - generate_disable_hsi
+  * - generate_enable_hsi48
+  * - generate_disable_hsi48
+  * - generate_enable_lsi
+  * - generate_disable_lsi
+  * - generate_enable_hse
+  * - generate_disable_hse
+  * - generate_enable_lse
+  * - generate_disable_lse
+  * - generate_pll_config_enable_with_checks
+  * - generate_pll_config_enable
+  * - generate_pll_disable
+  * - generate_enable_pll_output_with_checks
+  * - generate_enable_pll_output
+  * - generate_disable_pll_output
+  * - generate_set_voltage_scaling: called in mx_rcc_template.c.hbs
+  * - generate_set_system_clock: called in mx_rcc_template.c.hbs
+  * - generate_set_prescaler: called in mx_rcc_template.c.hbs
+  * - generate_init_systick: called in mx_rcc_template.c.hbs
+  * - generate_set_divider: called in mx_rcc_template.c.hbs
+  * - generate_config_mco: called in mx_rcc_template.c.hbs
+  * - generate_enable_in_stop_mode: called in mx_rcc_template.c.hbs
+~}}
+{{~#if (eq fct 'periph_configs')}}
+{{!  Used to generate function in mx_rcc_template.c.hbs:~}}
+{{!      - Fill the function mx_rcc_peripherals_clock_config if mode set to central or custom~}}
+{{!      - Fill the function mx_rcc_pppi_clock_config if mode set to controlled by periph~}}
+{{!  > RCC fct='periph_configs' central={true|false} clock_config=@root.clock_config~}}
+{{!   @arg central: Central mode~}}
+{{!   @arg clock_config: clock object to manage (all or one single pppi~}}
+  {{~assign 'central' central~}}
+  {{~#with clock_config~}}
+
+    {{#with SYSCLK}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='System Clock' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with HCLK}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='HCLK' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with HCLKDIV4}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='HCLK_DIV4' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with HCLKDIV8}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='HCLK_DIV8' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with PCLK1}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PCLK1' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with PCLK2}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PCLK2' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with PCLK3}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PCLK3' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with AUDIOCLK}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='AUDIOCLK' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with HSI}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='HSI' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hsi' direct=@root.central nb_resources=(length resources) display_message=true}}
+
+    {{/with~}}
+
+    {{#with HSI_DIV2}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='HSI_DIV2' frequency=frequency resources=resources}}
+
+    {{/with~}}
+
+    {{#with HSI48}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='HSI48' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hsi48' direct=@root.central nb_resources=(length resources) display_message=true}}
+
+    {{/with~}}
+
+    {{#with HSE}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='HSE' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hse' direct=@root.central nb_resources=(length resources) display_message=true}}
+
+    {{/with~}}
+
+    {{#with LSE}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='LSE' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='lse' direct=@root.central nb_resources=(length resources) display_message=true}}
+
+    {{/with~}}
+
+    {{#with LSI}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='LSI' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='lsi' direct=@root.central nb_resources=(length resources) display_message=true}}
+
+    {{/with~}}
+
+    {{#with PLL1}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLL1' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_pll_config_enable_with_checks' pll_info=@root.system_config.pll_used.PLL1 direct=@root.central display_message=true}}
+
+    {{/with~}}
+
+    {{#with ICLK1}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='ICLK1' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_set_divider' divider='ICLK1DIV'}}
+
+    {{/with}}
+
+    {{#with PLL1P}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLL1P' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' output_config = this pll_idx='1' pll_output='P' direct=@root.central display_message=true}}
+
+    {{/with}}
+    {{#with PLL1Q}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLL1Q' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' output_config = this pll_idx='1' pll_output='Q' direct=@root.central display_message=true}}
+
+    {{/with}}
+    {{#with PLL1R}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLL1R' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' output_config = this pll_idx='1' pll_output='R' direct=@root.central display_message=true}}
+
+    {{/with~}}
+
+    {{#with PLL2}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLL2' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_pll_config_enable_with_checks' pll_info=@root.system_config.pll_used.PLL2 direct=@root.central display_message=true}}
+
+    {{/with~}}
+
+    {{#with ICLK2}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='ICLK2' frequency=frequency resources=resources}}
+
+{{>RCC_LOCAL fct='generate_set_divider' divider='ICLK2DIV'}}
+    {{/with~}}
+
+    {{#with PLL2P}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLL2P' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' output_config = this pll_idx='2' pll_output='P' direct=@root.central display_message=true}}
+
+    {{/with}}
+    {{#with PLL2Q}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLL2Q' frequency=frequency resources=resources}}
+
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' output_config=this pll_idx='2' pll_output='Q' direct=@root.central display_message=true}}
+
+    {{/with}}
+    {{#with PLL2R}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLL2R' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' output_config=this pll_idx='2' pll_output='R' direct=@root.central display_message=true}}
+
+    {{/with}}
+
+    {{#with HSE_DIV}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='HSE_DIV' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_set_divider' divider='HSE_DIV'}}
+    {{/with~}}
+
+    {{#with ADCDIV}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='ADCDIV' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_set_divider' divider='ADCDIV'}}
+    {{/with~}}
+
+    {{#with PLAYDIV}}
+{{>RCC_LOCAL fct='generate_clock_source_info' clock_source='PLAYDIV' frequency=frequency resources=resources}}
+{{>RCC_LOCAL fct='generate_set_divider' divider='PLAYDIV'}}
+    {{/with~}}
+
+  {{/with~}}
+
+{{else if (eq fct 'periph_deactivate')}}
+{{!  Call in mx_rcc_template.c.hbs~}}
+{{!      - Fill the function mx_rcc_pppi_clock_deactivate if mode set to controlled by periph~}}
+{{! > RCC fct='periph_deactivate' clock_config=@root.clock_config}}
+  {{#with clock_config}}
+    {{#if (not (or HSI HSI48 HSE LSE LSI PLL1 PLL2))}}
+  /* Nothing to do */
+
+    {{/if~}}
+
+    {{#with PLL1P}}
+  if (mx_rcc_pll1_output_p_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with}}
+    {{#with PLL1Q}}
+  if (mx_rcc_pll1_output_q_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with}}
+    {{#with PLL1R}}
+  if (mx_rcc_pll1_output_r_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with}}
+    {{#with PLL1}}
+  if (mx_rcc_pll1_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with~}}
+
+    {{#with PLL2P}}
+  if (mx_rcc_pll2_output_p_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with}}
+    {{#with PLL2Q}}
+  if (mx_rcc_pll2_output_q_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with}}
+    {{#with PLL2R}}
+  if (mx_rcc_pll2_output_r_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with}}
+    {{#with PLL2}}
+  if (mx_rcc_pll2_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with~}}
+
+    {{#with HSI}}
+  if (mx_rcc_hsi_clock_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with~}}
+
+    {{#with HSI48}}
+  if (mx_rcc_hsi48_clock_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with~}}
+
+    {{#with HSE}}
+  if (mx_rcc_hse_clock_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with~}}
+
+    {{#with LSE}}
+  if (mx_rcc_lse_clock_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with~}}
+
+    {{#with LSI}}
+  if (mx_rcc_lsi_clock_deactivate() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with~}}
+  {{/with~}}
+
+{{else if (eq fct 'generate_clock_source_info')}}
+  /* Resources using {{clock_source}} ({{helper_rcc_display_frequency frequency}}):
+  {{#each resources}}
+    {{this}}
+  {{/each}}
+  */
+{{else if (eq fct 'generate_enable_osc_with_checks')}}
+{{!  Generate the enable of an OSC only if not already enabled. Also set/generate code for the control variables  ~}}
+{{!  Direct indicates if osc enabling is through driver code called directly (LL or HAL) or through the mx_rcc_osc_clock_config function ~}}
+{{!  nb_resources is the number of resources using this osc ~}}
+{{!> RCC fct='generate_enable_osc_with_checks' osc='hsi' direct={true|false} nb_resources=1 display_message=true~}}
+  {{~#if direct}}
+    {{~#if (not (helper_rcc_is_resource_enabled osc))}}
+{{>RCC_LOCAL fct='generate_enable_osc'}}
+      {{~#if (not (helper_rcc_is_central @root.rcc_ctx))}}
+  RCC_CONSUME_RESOURCE({{osc}}, {{nb_resources}});
+      {{/if~}}
+      {{~helper_rcc_set_resource_enabled osc~}}
+    {{else if display_message}}
+  /* {{uppercase osc}} already enabled inside {{@root.rcc_root_fct_name}}_init() */
+
+    {{/if~}}
+
+  {{else}}
+  if (mx_rcc_{{osc}}_clock_config({{nb_resources}}) != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+  {{/if~}}
+
+{{else if (eq fct 'generate_enable_osc')}}
+{{!  Generate the enable of an OSC ~}}
+{{!> RCC fct='generate_enable_osc' osc='hsi' ~}}
+{{>RCC_LOCAL fct=(concat 'generate_enable_' osc) ~}}
+
+{{else if (eq fct 'generate_disable_osc')}}
+{{!  Generate the disable of an OSC ~}}
+{{!> RCC fct='generate_disable_osc' osc='hsi' ~}}
+{{>RCC_LOCAL fct=(concat 'generate_disable_' osc) }}
+
+{{else if (eq fct 'generate_enable_hsi')}}
+{{!  Generate the enable of the HSI ~}}
+{{!> RCC fct='generate_enable_hsi' [hsi_divider='3'] [return='']~}}
+{{!> When specific return is required for ll layer, use the 'return' argument ~}}
+  {{~#if hsi_divider}}
+    {{~assign 'hsi_divider_value' hsi_divider~}}
+  {{else}}
+    {{~assign 'hsi_divider_value' @root.system_config.divider.hsi~}}
+  {{/if}}
+
+  {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_HSI_Enable(HAL_RCC_HSI_DIV{{@root.hsi_divider_value}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+  {{else}}
+    {{~#if @root.do_rcc_ll_optim}}
+  {{helper_common_gen_ll_code "LL_RCC_HSI_SetDivider" (concat 'LL_RCC_HSI_DIV_' @root.hsi_divider_value)}}
+  /* LL_RCC_HSI_Enable();
+  do
+  {
+
+  }
+  while (LL_RCC_HSI_IsReady() != 1U);
+  */
+    {{else}}
+      {{~#if (or return (eq return ''))}}
+        {{~assign 'return_if_failed' return~}}
+      {{else}}
+        {{~assign 'return_if_failed' 'SYSTEM_CLOCK_ERROR'~}}
+      {{/if}}
+  LL_RCC_HSI_SetDivider(LL_RCC_HSI_DIV_{{@root.hsi_divider_value}});
+  LL_RCC_HSI_Enable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='2UL' return_if_failed=@root.return_if_failed}}
+  while (LL_RCC_HSI_IsReady() != 1U);
+    {{/if~}}
+  {{/if~}}
+
+{{~else if (eq fct 'generate_disable_hsi')}}
+{{!  Generate the disable of the HSI ~}}
+{{!> RCC fct='generate_disable_hsi'~}}
+  {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_HSI_Disable() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  {{else}}
+  LL_RCC_HSI_Disable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='2UL' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_HSI_IsReady() != 0U);
+  {{/if}}
+
+{{~else if (eq fct 'generate_enable_hsi48')}}
+{{!  Generate the enable of the HSI48 ~}}
+{{!> RCC fct='generate_enable_hsi48' ~}}
+  {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_HSI48_Enable() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  {{else}}
+  LL_RCC_HSI48_Enable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='2UL' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_HSI48_IsReady() != 1U);
+  {{/if~}}
+
+{{~else if (eq fct 'generate_disable_hsi48')}}
+{{!  Generate the disable of the HSI48 ~}}
+{{!> RCC fct='generate_disable_hsi48' ~}}
+  {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_HSI48_Disable() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  {{else}}
+  LL_RCC_HSI48_Disable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='2UL' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_HSI48_IsReady() != 0U);
+  {{/if~}}
+
+{{else if (eq fct 'generate_enable_lsi')}}
+{{!  Generate the enable of the LSI ~}}
+{{!> RCC fct='generate_enable_lsi'~}}
+  {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_LSI_Enable() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+  {{else}}
+  LL_RCC_LSI_Enable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='((10u * 128u * 1000u) / LSI_VALUE)' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_LSI_IsReady() != 1U);
+
+  {{/if~}}
+
+{{else if (eq fct 'generate_disable_lsi')}}
+{{!  Generate the disable of the LSI ~}}
+{{!> RCC fct='generate_disable_lsi'~}}
+  {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_LSI_Disable() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+  {{else}}
+  LL_RCC_LSI_Disable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='((10u * 128u * 1000u) / LSI_VALUE)' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_LSI_IsReady() != 0U);
+
+  {{/if~}}
+
+{{else if (eq fct 'generate_enable_hse')}}
+{{!  Generate the enable of the HSE ~}}
+{{!> RCC fct='generate_enable_hse' ~}}
+  {{#if (not @root.rcc_ctx.basic.hse) }}
+#warning "HSE not available on this package - Change mux clock source selection"
+
+  {{else if (eq @root.rcc_ctx.basic.hse.state 'OFF')}}
+#warning "Configured a HSE source in CubeMx RCC panel"
+  {{else}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_HSE_Enable(HAL_RCC_HSE_{{@root.rcc_ctx.basic.hse.state}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+    {{else}}
+      {{#if (eq @root.rcc_ctx.basic.hse.state "BYPASS")}}
+  LL_RCC_HSE_ConfigBypass(LL_RCC_HSE_ANALOG_TYPE);
+      {{else if (eq @root.rcc_ctx.basic.hse.state "BYPASS_DIGITAL")}}
+  LL_RCC_HSE_ConfigBypass(LL_RCC_HSE_DIGITAL_TYPE);
+      {{/if}}
+  LL_RCC_HSE_Enable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='HSE_STARTUP_TIMEOUT' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_HSE_IsReady() != 1U);
+
+    {{/if}}
+  {{/if~}}
+
+{{else if (eq fct 'generate_disable_hse')}}
+{{!  Generate the disable of the HSE ~}}
+{{!> RCC fct='generate_disable_hse' ~}}
+  {{~#if (eq @root.rcc_ctx.basic.hse.state 'OFF')}}
+#warning "HSE cannot be disabled. No source configured in CubeMx RCC panel"
+
+  {{else}}
+    {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_HSE_Disable() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+    {{else}}
+  LL_RCC_HSE_Disable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='HSE_STARTUP_TIMEOUT' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_HSE_IsReady() != 0U);
+
+    {{/if}}
+  {{/if~}}
+
+{{else if (eq fct 'generate_enable_lse')}}
+{{!  Generate the enable of the LSE ~}}
+{{!> RCC fct='generate_enable_lse' ~}}
+
+{{>RCC fct='generate_enable_lse_with_write_protection' wp_disable=true wp_enable=true css=false}}
+
+{{else if (eq fct 'generate_disable_lse')}}
+{{!  Generate the enable of the LSE ~}}
+{{!> RCC fct='generate_disable_lse' ~}}
+  {{#if (eq @root.rcc_ctx.basic.lse.state 'OFF')}}
+#warning "LSE disable cannot be generated. No source configured in CubeMx RCC panel"
+
+  {{else}}
+    {{~#if (eq @root.current_layer 'HAL')}}
+{{>PWR_HAL fct='generate_write_protection_disable'}}
+  if (HAL_RCC_LSE_Disable() != HAL_OK)
+  {
+    {{>PWR_HAL fct='generate_write_protection_enable'}}
+    return SYSTEM_CLOCK_ERROR;
+  }
+{{>PWR_HAL fct='generate_write_protection_enable'}}
+
+    {{~else}}
+{{>PWR_LL fct='generate_write_protection_disable'}}
+  LL_RCC_LSE_Disable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='LSE_STARTUP_TIMEOUT' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_LSE_IsReady() != 0U);
+{{>PWR_LL fct='generate_write_protection_enable'}}
+
+    {{/if}}
+  {{/if~}}
+
+{{else if (eq fct 'generate_pll_config_enable_with_checks')}}
+{{!  Generate the pll config code including the pll source enable ~}}
+{{!> RCC fct='generate_pll_config_enable_with_checks' pll_info=@root.system_config.pll_used.PLLx direct=true/false display_message=true}}
+  {{~#if direct ~}}
+
+    {{!  Generate the src enable ~}}
+    {{~assign 'pll_src_name' (lowercase pll_info.config.src)}}
+    {{~#if (or (eq @root.pll_src_name 'hsi') (eq @root.pll_src_name 'hse'))}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc=@root.pll_src_name direct=direct nb_resources=1 display_message=false}}{{! Only one PLL using the source ~}}
+    {{/if~}}
+
+    {{!  Generate the PLL config and enable ~}}
+    {{~assign 'pll_name' (concat 'pll' pll_info.idx)}}
+    {{~#if (not (helper_rcc_is_resource_enabled @root.pll_name))}}
+{{>RCC_LOCAL fct='generate_pll_config_enable'}}
+      {{~#if (not (helper_rcc_is_central @root.rcc_ctx))}}
+  RCC_CONSUME_RESOURCE({{@root.pll_name}}, 1);
+      {{/if~}}
+    {{~helper_rcc_set_resource_enabled @root.pll_name}}
+    {{else if display_message}}
+  /* PLL{{pll_info.idx}} already configured and enabled inside {{@root.rcc_root_fct_name}}_init() */
+    {{/if}}
+  {{else}}
+  if (mx_rcc_pll{{pll_info.idx}}_config() != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  {{/if~}}
+
+{{else if (eq fct 'generate_pll_config_enable')}}
+{{!  Generate the pll config and enable code ~}}
+{{!> RCC fct='generate_pll_config_enable' pll_info=@root.system_config.pll_used.PLLx}}
+
+  {{#with pll_info}}
+    {{~#if (eq @root.current_layer 'HAL')}}
+  hal_rcc_pll_config_t config_pll{{idx}};
+  config_pll{{idx}}.pll_source      = HAL_RCC_PLL_SRC_{{config.src}};
+  config_pll{{idx}}.pll_m           = {{config.m}}U;
+  config_pll{{idx}}.pll_n           = {{config.n}}U;
+  config_pll{{idx}}.pll_p           = {{config.p}}U;
+  config_pll{{idx}}.pll_q           = {{config.q}}U;
+  config_pll{{idx}}.pll_r           = {{config.r}}U;
+  config_pll{{idx}}.pll_fracn       = {{config.fracn}};
+  config_pll{{idx}}.pll_input_range = HAL_RCC_PLL_INPUT_RANGE_{{config.input_range}};
+  config_pll{{idx}}.pll_vco_range   = HAL_RCC_PLL_VCO_RANGE_{{config.vco_range}};
+  if (HAL_RCC_PLL{{idx}}_SetConfig(&config_pll{{idx}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+  if (HAL_RCC_PLL{{idx}}_Enable() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{else}}
+      {{#if (eq idx 1)}}
+  LL_RCC_PLL1_ConfigDomain_SYS(LL_RCC_PLL{{idx}}SOURCE_{{config.src}}, {{config.m}}U, {{config.n}}U, {{config.p}}U);
+
+      {{else}}
+  LL_RCC_PLL{{idx}}_SetSource(LL_RCC_PLL{{idx}}SOURCE_{{config.src}});
+  LL_RCC_PLL{{idx}}_SetM({{config.m}}U);
+  LL_RCC_PLL{{idx}}_SetN({{config.n}}U);
+  LL_RCC_PLL{{idx}}_SetP({{config.p}}U);
+
+      {{/if}}
+      {{#if @root.do_rcc_ll_optim}}
+  {{helper_common_gen_ll_code (concat 'LL_RCC_PLL' idx '_SetQ') (concat config.q 'U')}}
+  {{helper_common_gen_ll_code (concat 'LL_RCC_PLL' idx '_SetR') (concat config.r 'U')}}
+        {{#if (gt config.fracn 0)}}
+  LL_RCC_PLL{{idx}}_SetFRACN({{config.fracn}}U);
+  LL_RCC_PLL{{idx}}_EnableFRACN();
+
+        {{/if}}
+  {{helper_common_gen_ll_code (concat 'LL_RCC_PLL' idx '_SetInputRange') (concat 'LL_RCC_PLLINPUTRANGE_' config.input_range)}}
+  {{helper_common_gen_ll_code (concat 'LL_RCC_PLL' idx '_SetVCORange') (concat 'LL_RCC_PLLVCORANGE_' config.vco_range)}}
+
+      {{else}}
+  LL_RCC_PLL{{idx}}_SetQ({{config.q}}U);
+  LL_RCC_PLL{{idx}}_SetR({{config.r}}U);
+  LL_RCC_PLL{{idx}}_DisableFRACN();
+        {{#if (gt config.fracn 0)}}
+  LL_RCC_PLL{{idx}}_SetFRACN({{config.fracn}}U);
+  LL_RCC_PLL{{idx}}_EnableFRACN();
+        {{else}}
+  LL_RCC_PLL{{idx}}_SetFRACN(0U);
+        {{/if}}
+
+  LL_RCC_PLL{{idx}}_SetInputRange(LL_RCC_PLLINPUTRANGE_{{config.input_range}});
+  LL_RCC_PLL{{idx}}_SetVCORange(LL_RCC_PLLVCORANGE_{{config.vco_range}});
+
+      {{/if}}
+  LL_RCC_PLL{{idx}}_Enable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='2UL' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_PLL{{idx}}_IsReady() != 1U);
+
+    {{/if}}
+  {{/with}}
+
+{{~else if (eq fct 'generate_pll_disable')}}
+{{!  Generate the pll disable code ~}}
+{{!> RCC fct='generate_pll_disable' pll_idx=@root.system_config.pll_used.PLLx.idx }}
+  {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_PLL{{pll_idx}}_Disable() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  {{else}}
+  LL_RCC_PLL{{pll_idx}}_Disable();
+  {{~> SYSTEM fct='system_timeout_loop' timing='2UL' return_if_failed='SYSTEM_CLOCK_ERROR'}}
+  while (LL_RCC_PLL{{pll_idx}}_IsReady() != 0U);
+  {{/if}}
+
+
+{{else if (eq fct 'generate_enable_pll_output_with_checks')}}
+{{!  Generate the pll output enable code ~}}
+{{!> RCC fct='generate_enable_pll_output_with_checks' output_config = PLL1P pll_idx='1' pll_output='P' direct=true/false display_message=true/false}}
+  {{~#if direct }}
+    {{~assign 'output_name' (concat 'pll' pll_idx (lowercase pll_output))}}
+    {{~#if (not (helper_rcc_is_resource_enabled @root.output_name))}}
+{{>RCC_LOCAL fct='generate_enable_pll_output'}}
+      {{~#if (not (helper_rcc_is_central @root.rcc_ctx))}}
+  RCC_CONSUME_RESOURCE({{@root.output_name}}, 1);
+      {{/if~}}
+      {{~helper_rcc_set_resource_enabled @root.output_name}}
+    {{else if display_message}}
+  /* PLL{{pll_idx}}{{pll_output}} already configured and enabled inside {{@root.rcc_root_fct_name}}_init() */
+    {{/if}}
+  {{else}}
+  if (mx_rcc_pll{{pll_idx}}_output_{{lowercase pll_output}}_config({{length output_config.resources}}) != SYSTEM_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  {{/if~}}
+
+
+{{else if (eq fct 'generate_enable_pll_output')}}
+{{!  Generate the pll output enable code ~}}
+{{!> RCC fct='generate_enable_pll_output' pll_idx='1' pll_output='P'}}
+  {{#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_PLL{{pll_idx}}_EnableOutput(HAL_RCC_PLL{{pll_idx}}_OUTPUT_{{pll_output}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  {{else}}
+  LL_RCC_PLL{{pll_idx}}_EnableOutput{{pll_output}}();
+  {{/if}}
+
+{{else if (eq fct 'generate_disable_pll_output')}}
+{{!     Generate the pll output enable code ~}}
+{{!> RCC fct='generate_disable_pll_output' pll_idx='1' pll_output='P' }}
+
+  {{~#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_PLL{{pll_idx}}_DisableOutput(HAL_RCC_PLL{{pll_idx}}_OUTPUT_{{pll_output}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  {{else}}
+  LL_RCC_PLL{{pll_idx}}_DisableOutput{{pll_output}}();
+  {{/if}}
+
+{{~else if (eq fct 'generate_set_voltage_scaling')}}
+{{!  Generate the voltage scaling setting ~}}
+{{!> RCC fct='generate_set_voltage_scaling'}}
+  {{#if (eq @root.current_layer 'HAL')}}
+    {{#> PWR_HAL fct='generate_vos_config'~}}
+    {{/PWR_HAL}}
+
+  {{else}}
+    {{#> PWR_LL fct='generate_vos_config'~}}
+    {{/PWR_LL}}
+  {{/if}}
+
+{{else if (eq fct 'generate_set_system_clock')}}
+{{!  Generate the setting of system clock ~}}
+{{!> RCC fct='generate_set_system_clock' default=true/false [return='']}}
+{{!> When specific return is required for ll layer, use the 'return' argument ~}}
+  {{#if default }}
+    {{~assign 'system_clock_name' 'HSI'~}}
+    {{~assign 'system_clock_name_ll' 'HSI'~}}
+  {{else}}
+    {{~assign 'system_clock_name' @root.system_config.clock_source.name~}}
+    {{~assign 'system_clock_name_ll' @root.system_config.clock_source.nameLL~}}
+  {{/if}}
+
+  {{#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_SetSYSCLKSource(HAL_RCC_SYSCLK_SRC_{{@root.system_clock_name}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+  {{else}}
+    {{#if (and @root.do_rcc_ll_optim (eq @root.system_clock_name 'HSI'))}}
+  /* LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_{{@root.system_clock_name_ll}}); */
+  /* Wait till System clock is ready */
+  /*
+  do
+  {
+
+  }
+  while (LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_{{@root.system_clock_name_ll}});
+  */
+    {{else}}
+      {{~#if (or return (eq return ''))}}
+        {{~assign 'return_if_failed' return~}}
+      {{else}}
+        {{~assign 'return_if_failed' 'SYSTEM_CLOCK_ERROR'~}}
+      {{/if}}
+  LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_{{@root.system_clock_name_ll}});
+  /* Wait till System clock is ready */
+  {{~> SYSTEM fct='system_timeout_loop' timing='5000UL' return_if_failed=@root.return_if_failed}}
+  while (LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_{{@root.system_clock_name_ll}});
+    {{/if}}
+  {{/if}}
+
+{{else if (eq fct 'generate_set_flash_config')}}
+{{!  Generate the setting of flash latency and programming delay ~}}
+{{!> RCC fct='generate_set_flash'}}
+
+  {{~#if (eq @root.current_layer 'HAL')}}
+    {{#with @root.system_config}}
+  if (HAL_FLASH_ITF_SetLatency(HAL_FLASH, HAL_FLASH_ITF_LATENCY_{{flash_latency}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  if (HAL_FLASH_ITF_SetProgrammingDelay(HAL_FLASH, HAL_FLASH_ITF_PROGRAM_DELAY_{{flash_programming_delay}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{/with}}
+  {{~else}}
+    {{#with @root.system_config}}
+  LL_FLASH_SetLatency(FLASH, LL_FLASH_LATENCY_{{flash_latency}}WS);
+  if (LL_FLASH_GetLatency(FLASH) != LL_FLASH_LATENCY_{{flash_latency}}WS)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+  LL_FLASH_SetProgrammingDelay(FLASH, LL_FLASH_PROGRAM_DELAY_{{flash_programming_delay}});
+    {{/with}}
+  {{/if~}}
+
+{{else if (eq fct 'generate_set_system_clock_sequence')}}
+{{!  Generate the setting of system clock ~}}
+{{!> RCC fct='generate_set_system_clock_sequence'}}
+
+  {{#with @root.system_config}}
+    {{#if (gt frequencies.ahb frequencies.default)}}
+  /* Frequency will be increased */
+{{>RCC_LOCAL fct='generate_set_flash_config'}}
+    {{/if}}
+
+{{>RCC_LOCAL fct='generate_set_prescaler'}}
+{{>RCC_LOCAL fct='generate_set_system_clock'}}
+
+    {{#if (lte frequencies.ahb frequencies.default)}}
+  /* Frequency has been decreased */
+{{>RCC_LOCAL fct='generate_set_flash_config'}}
+    {{/if}}
+  {{/with}}
+
+{{else if (eq fct 'generate_set_prescaler')}}
+{{!     Generate the enable of the HSI ~}}
+{{!> RCC fct='generate_set_prescaler'}}
+  /** Initializes the CPU, AHB and APB busses clocks */
+  {{#with @root.system_config.prescaler}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  hal_rcc_bus_clk_config_t config_bus;
+  config_bus.hclk_prescaler  = HAL_RCC_HCLK_PRESCALER{{ahb}};
+  config_bus.pclk1_prescaler = HAL_RCC_PCLK_PRESCALER{{apb1}};
+  config_bus.pclk2_prescaler = HAL_RCC_PCLK_PRESCALER{{apb2}};
+  config_bus.pclk3_prescaler = HAL_RCC_PCLK_PRESCALER{{apb3}};
+  if (HAL_RCC_SetBusClockConfig(&config_bus) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+    {{else}}
+      {{~#if (and @root.do_rcc_ll_optim (eq ahb '1') (eq apb1 '1') (eq apb2 '1') (eq apb3 '1'))}}
+  /* LL_RCC_ConfigBusClock(LL_RCC_HCLK_PRESCALER_{{ahb}} | LL_RCC_APB1_PRESCALER_{{apb1}} |
+                           LL_RCC_APB2_PRESCALER_{{apb2}} | LL_RCC_APB3_PRESCALER_{{apb3}}); */
+
+      {{else}}
+  LL_RCC_ConfigBusClock(LL_RCC_HCLK_PRESCALER_{{ahb}} | LL_RCC_APB1_PRESCALER_{{apb1}} |
+                        LL_RCC_APB2_PRESCALER_{{apb2}} | LL_RCC_APB3_PRESCALER_{{apb3}});
+
+      {{/if}}
+    {{/if}}
+  {{/with~}}
+
+{{else if (eq fct 'generate_init_systick')}}
+{{!     Generate the systick configuration, if needed ~}}
+{{!> RCC fct='generate_init_systick'}}
+  {{#if (helper_rcc_is_cortex_external_clock_required)}}
+
+  /** Systick Initialization */
+    {{#with @root.system_config.systick_source}}
+      {{#if LSE}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='lse' direct=true nb_resources=1}}
+      {{/if~}}
+
+      {{#if LSI}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='lsi' direct=true nb_resources=1}}
+      {{/if~}}
+
+      {{#if is_default}}
+  /* Default value selected */
+      {{else}}
+        {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_SetSysTickExternalClkSource(HAL_RCC_SYSTICK_CLK_SRC_{{name}});
+
+        {{else}}
+          {{~#if @root.do_rcc_ll_optim}}
+  {{helper_common_gen_ll_code "LL_RCC_SetSystickClockSource" (concat 'LL_RCC_SYSTICK_CLKSOURCE_' name)}}
+
+          {{else}}
+  LL_RCC_SetSystickClockSource(LL_RCC_SYSTICK_CLKSOURCE_{{name}});
+
+          {{/if}}
+        {{/if}}
+      {{/if}}
+    {{/with}}
+  {{/if}}
+
+{{else if (eq fct 'generate_update_core_clock')}}
+  {{#if (eq @root.current_layer 'HAL')}}
+  if (HAL_UpdateCoreClock() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+  {{else}}
+  LL_SetSystemCoreClock({{@root.system_config.frequencies.ahb}}U);
+    {{#if (not @root.only_ll)}}
+  HAL_InitTick(uwTickFreq, uwTickPrio);
+    {{else}}
+  LL_Init1msTick(SystemCoreClock);
+    {{/if}}
+
+  {{/if}}
+
+{{else if (eq fct 'generate_set_divider')}}
+{{!     Generate the setting of one divider ~}}
+{{!> RCC fct='generate_set_divider' divider='ADCDIV'~}}
+  {{#if (eq divider 'ADCDIV')}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_ADC_SetKernelClkPrescaler(HAL_RCC_ADC_PRESCALER{{@root.system_config.divider.adc}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+    {{else}}
+  {{helper_common_gen_ll_code "LL_RCC_SetADCPrescaler" (concat 'LL_RCC_ADC_PRESCALER_' @root.system_config.divider.adc)}}
+
+    {{/if}}
+
+  {{else if (eq divider 'ICLK1DIV')}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_ICLK_SetDivider(HAL_RCC_ICLK1, HAL_RCC_ICLK_DIV{{@root.system_config.divider.iclk1}});
+
+    {{else }}
+  {{helper_common_gen_ll_code "LL_RCC_ICLK_SetDivider" "LL_RCC_ICLK1" (concat 'LL_RCC_ICLK_DIV_' @root.system_config.divider.iclk1)}}
+
+    {{/if}}
+  {{else if (eq divider 'ICLK2DIV')}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_ICLK_SetDivider(HAL_RCC_ICLK2, HAL_RCC_ICLK_DIV{{@root.system_config.divider.iclk2}});
+
+    {{else}}
+  {{helper_common_gen_ll_code "LL_RCC_ICLK_SetDivider" "LL_RCC_ICLK2" (concat 'LL_RCC_ICLK_DIV_' @root.system_config.divider.iclk2)}}
+
+    {{/if}}
+  {{else if (eq divider 'PLAYDIV')}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_PLAY1_SetKernelClkDivider(HAL_RCC_PLAY1_CLK_DIVIDER{{@root.system_config.divider.play}}) != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+
+    {{else}}
+  {{helper_common_gen_ll_code "LL_RCC_SetPLAY1Divider" (concat 'LL_RCC_PLAY1_DIVIDER_' @root.system_config.divider.play)}}
+
+    {{/if}}
+  {{else if (eq divider 'HSE_DIV')}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_RTC_SetHSEPrescaler({{@root.system_config.divider.hse}});
+
+    {{else}}
+  {{helper_common_gen_ll_code "LL_RCC_SetRTC_HSEPrescaler" @root.system_config.divider.hse}}
+
+    {{/if}}
+
+  {{/if~}}
+
+{{else if (eq fct 'generate_config_clock_outputs')}}
+  {{#with @root.rcc_ctx}}
+
+    {{~#if (or additional.clk_outputs.mco1 additional.clk_outputs.mco2)}}
+  /** Configure MCO (clock source, IO and divider) */
+    {{/if}}
+
+    {{#if additional.clk_outputs.mco1}}
+      {{#if (eq @root.system_config.clk_outputs.mco1.src 'HSI')}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hsi' direct=true nb_resources=1}}
+      {{/if}}
+      {{#if (eq @root.system_config.clk_outputs.mco1.src 'LSE')}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='lse' direct=true nb_resources=1}}
+      {{/if}}
+      {{#if (eq @root.system_config.clk_outputs.mco1.src 'HSE')}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hse' direct=true nb_resources=1}}
+      {{/if}}
+      {{#if (eq @root.system_config.clk_outputs.mco1.src 'PLL1Q')}}
+{{>RCC_LOCAL fct='generate_pll_config_enable_with_checks' pll_info=@root.system_config.pll_used.PLL1 direct=true}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' pll_idx ='1' pll_output='Q' direct=true}}
+      {{/if}}
+      {{#if (eq @root.system_config.clk_outputs.mco1.src 'HSI48')}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hsi48' direct=true nb_resources=1}}
+      {{/if}}
+    {{/if}}
+
+    {{#if additional.clk_outputs.mco2}}
+      {{#if (eq @root.system_config.clk_outputs.mco2.src 'PLL2P')}}
+{{>RCC_LOCAL fct='generate_pll_config_enable_with_checks' pll_info=@root.system_config.pll_used.PLL2 direct=true}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' pll_idx ='2' pll_output='P' direct=true}}
+      {{/if}}
+
+      {{#if (eq @root.system_config.clk_outputs.mco2.src 'HSE')}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='hse' direct=true nb_resources=1}}
+      {{/if}}
+      {{#if (eq @root.system_config.clk_outputs.mco2.src 'PLL1P')}}
+{{>RCC_LOCAL fct='generate_pll_config_enable_with_checks' pll_info=@root.system_config.pll_used.PLL1 direct=true}}
+{{>RCC_LOCAL fct='generate_enable_pll_output_with_checks' pll_idx ='1' pll_output='P' direct=true}}
+      {{/if}}
+      {{#if (eq @root.system_config.clk_outputs.mco2.src 'LSI')}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='lsi' direct=true nb_resources=1}}
+      {{/if}}
+    {{/if}}
+
+    {{~#if (eq @root.current_layer 'HAL')}}
+{{> GPIO_HAL fct='init_resource' resource=@root.current_resource return_if_failed='SYSTEM_PERIPHERAL_ERROR' init_model=@root.codegen_ctxt.init_model fct_name=@root.rcc_root_fct_name}}
+
+      {{~#if additional.clk_outputs.mco1}}
+  HAL_RCC_SetConfigMCO(HAL_RCC_MCO1_SRC_{{@root.system_config.clk_outputs.mco1.src}}, HAL_RCC_MCO1_PRESCALER{{@root.system_config.clk_outputs.mco1.div}});
+      {{/if}}
+      {{#if additional.clk_outputs.mco2}}
+  HAL_RCC_SetConfigMCO(HAL_RCC_MCO2_SRC_{{@root.system_config.clk_outputs.mco2.src}}, HAL_RCC_MCO2_PRESCALER{{@root.system_config.clk_outputs.mco2.div}});
+      {{/if}}
+    {{else}}
+{{> GPIO_LL fct='init_resource' resource=@root.current_resource return_if_failed='SYSTEM_PERIPHERAL_ERROR' init_model=@root.codegen_ctxt.init_model fct_name=@root.rcc_root_fct_name}}
+
+      {{#if additional.clk_outputs.mco1}}
+  {{helper_common_gen_ll_code "LL_RCC_ConfigMCO" (concat 'LL_RCC_MCO1SOURCE_' @root.system_config.clk_outputs.mco1.src) (concat 'LL_RCC_MCO1_PRESCALER_' @root.system_config.clk_outputs.mco1.div)}}
+      {{/if}}
+      {{#if additional.clk_outputs.mco2}}
+  {{helper_common_gen_ll_code "LL_RCC_ConfigMCO" (concat 'LL_RCC_MCO2SOURCE_' @root.system_config.clk_outputs.mco2.src) (concat 'LL_RCC_MCO2_PRESCALER_' @root.system_config.clk_outputs.mco2.div)}}
+      {{/if}}
+
+    {{/if~}}
+  {{/with~}}
+
+{{else if (eq fct 'generate_enable_css')}}
+
+  {{~#if (not (eq @root.rcc_ctx.basic.hse.state 'OFF'))}}
+    {{#if @root.rcc_ctx.basic.hse.enable_css}}
+  /*
+   *  Enable the Clock Security System: The CSSI is linked to
+   *  the Cortex-M33 NMI (Non-Maskable Interrupt) exception vector.
+   */
+      {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_HSE_EnableCSS();
+      {{else}}
+  LL_RCC_HSE_EnableCSS();
+      {{/if}}
+
+    {{/if}}
+  {{/if}}
+
+  {{~#if (not (eq @root.rcc_ctx.basic.lse.state 'OFF'))}}
+    {{#if @root.rcc_ctx.basic.lse.enable_css}}
+{{! LSE need to be enabled before enabling the CSS to avoid CSS being immediately detected ~}}
+{{>RCC_LOCAL fct='generate_enable_osc_with_checks' osc='lse' direct=true nb_resources=1}}
+
+  /* Enable the LSE Clock Security System */
+      {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_LSE_EnableCSS();
+      {{else}}
+  LL_RCC_LSE_EnableCSS();
+      {{/if}}
+{{> EXTI fct='exti_get_init' layer=@root.current_layer needs=system.exti.lse_css_interruption.needs found_exti=true}}
+    {{/if}}
+  {{/if}}
+
+{{else if (eq fct 'generate_configure_enable_it')}}
+{{! Initialise the nvic_context by adding needs for NMI and RCC irq context  ~}}
+  {{~assign 'nvic_context' 'undefined'}}
+  {{~assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context @root.rcc_ctx.system.nvic.hse_css_interruption.needs @root.current_resource @root.rcc_ctx.system.nvic.hse_css_irq_handler_generation)}}
+  {{~assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context @root.rcc_ctx.system.nvic.nvic_config.needs @root.current_resource @root.rcc_ctx.system.nvic.irq_handler_generation)}}
+  {{#if @root.rcc_ctx.system.nvic.enable_interruption~}}
+{{! Configure and enable RCC_IRQ (no configuration for NMI) }}
+  /* Configure and enable the RCC interruption */
+{{> CORTEX fct='init' layer=@root.current_layer needs=@root.rcc_ctx.system.nvic.nvic_config.needs}}
+  {{/if}}
+
+{{else if (eq fct 'generate_enable_in_stop_mode')}}
+
+  {{~#if @root.rcc_ctx.additional.hsi.enable_in_stop_mode}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  if (HAL_RCC_HSI_EnableInStopMode() != HAL_OK)
+  {
+    return SYSTEM_CLOCK_ERROR;
+  }
+    {{else}}
+  LL_RCC_HSI_EnableInStopMode();
+    {{/if}}
+  {{/if}}
+
+{{else if (eq fct 'generate_debug_mode_config')}}
+
+  {{~#if (eq @root.rcc_ctx.additional.debug_trace_clk_mode 'SW')}}
+    {{#if (eq @root.current_layer 'HAL')}}
+  HAL_RCC_DBG_EnableClock();
+    {{else}}
+  LL_AHB3_GRP1_EnableClock(LL_AHB3_GRP1_PERIPH_DBG);
+    {{/if}}
+  {{/if}}
+
+{{~else}}
+#warning "RCC partial local called but wrong step {{fct}}"
+{{/if~}}
+

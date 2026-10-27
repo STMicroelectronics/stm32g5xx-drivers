@@ -1,0 +1,496 @@
+{{!--
+  ******************************************************************************
+  * @file           : mx_play_template.c.hbs
+  * @brief          : {{@root.current_resource}} Peripheral initialization
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  ~--}}
+{{#helper_common_beautifier}}
+{{assign "codegen_ctxt" (helper_common_get_codegen_context 'PLAY' (get '') @root.EnvVarAPI @root.peripheralsResourceManagerAPI @root.SWConfigurationAPI)~}}
+{{log "PLAY template codegen_ctxt:" @root.codegen_ctxt~}}
+{{assign 'strategy' @root.codegen_ctxt.strategy~}}
+{{assign 'current_resource' @root.codegen_ctxt.current_resource~}}
+{{assign 'instances' @root.codegen_ctxt.instances~}}
+{{> SYSTEM fct='system_check_ll_optim'}}
+/**
+  ******************************************************************************
+  * @file           : mx_{{lowercase @root.current_resource}}.c
+  * @brief          : {{@root.current_resource}} Peripheral initialization
+{{> LICENSE}}
+
+/* Includes ------------------------------------------------------------------*/
+#include "mx_{{lowercase @root.current_resource}}.h"
+{{> RCC fct='include_rcc'}}
+
+/* Private typedef -----------------------------------------------------------*/
+/* Private define ------------------------------------------------------------*/
+/* Private macro -------------------------------------------------------------*/
+/* Private variables ---------------------------------------------------------*/
+/* Private functions prototype------------------------------------------------*/
+/* Exported variables by reference--------------------------------------------*/
+{{#each @root.instances~}}
+    {{~assign 'current_layer' config.info.layer~}}
+  {{#if (eq @root.current_layer 'HAL')~}}
+static hal_play_handle_t h{{@root.current_resource}};
+  {{/if~}}
+{{/each~}}
+{{assign 'hal_handle_exist' false~}}
+{{assign 'nvic_context' 'undefined'~}}
+{{assign 'nvic_generate_handler' true~}}
+{{#each @root.instances~}}
+  {{~assign 'current_resource' current_resource~}}
+  {{~assign 'current_layer' config.info.layer~}}
+  {{~assign 'play_cxt' config}}
+{{#if (eq @root.current_layer 'HAL')~}}
+{{> GPIO_HAL fct='gpio_exti_get_variables' resource=@root.current_resource~}}
+{{/if~}}
+{{> EXTI fct='exti_get_variables' layer=@root.current_layer needs=@root.play_cxt.system.exti.exti_config.needs}}
+{{! Initialize the context for LL code optimization ~}}
+  {{~assign "periphHWDescription" (@root.peripheralsResourceManagerAPI.getHardwareIpDescription @root.current_resource)~}}
+  {{~assign 'lut_table' (helper_play_get_lut_table @root.periphHWDescription.peripheralVersionNum)~}}
+{{helper_common_initialize_ll_code @root.optim_enable @root.lut_table @root.current_resource}}
+
+/******************************************************************************/
+/* Exported functions for {{@root.current_resource}} in {{@root.current_layer}} layer */
+/******************************************************************************/
+  {{~assign 'fct_name' (helper_common_get_generated_function_name @root.current_resource @root.current_layer @root.current_index @root.current_function @root.from_where)~}}
+  {{~assign 'current_index' (helper_common_inc_index @root.current_resource)~}}
+  {{~assign 'found_exti' false}}
+{{!
+    Generation of initialization function used in HAL
+~}}
+{{#with @root.play_cxt}}
+{{#if (eq @root.current_layer 'HAL')}}
+hal_play_handle_t *{{@root.fct_name}}_init(void)
+{
+{{> RCC fct='generate_peripheral_clock_activation' hw_resource=@root.current_resource}}
+  if (HAL_PLAY_Init(&h{{@root.current_resource}}, HAL_{{uppercase @root.current_resource}}) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{> RCC fct='generate_kernel_clock' hw_resource=@root.current_resource sw_resource='PLAY'}}
+
+{{assign "in_config_enabled_count" 0~}}
+{{#each basic.in_config as |config|~}}
+  {{#if config.enable~}}
+    {{assign "in_config_enabled_count" (add @root.in_config_enabled_count 1)~}}
+  {{/if~}}
+{{/each}}
+{{#if (gt @root.in_config_enabled_count 0)}}
+  /* PLAY input configuration */
+  hal_play_in_config_t in_config[{{@root.in_config_enabled_count}}];
+
+{{assign "enabled_index" 0~}}
+{{#each basic.in_config as |config|~}}
+{{#if config.enable}}
+{{#if config.user_label}}
+  /* Input: {{config.user_label}} */
+{{/if}}
+  in_config[{{@root.enabled_index}}].source          = HAL_{{uppercase @root.current_resource}}_IN_{{helper_play_input_src_rename config.input_src.source}}_MUX{{@index}};
+  in_config[{{@root.enabled_index}}].mode            = HAL_PLAY_EDGE_DETECTION_{{config.mode}};
+  in_config[{{@root.enabled_index}}].min_pulse_width = {{config.min_pulse_width}};
+
+{{assign "enabled_index" (add @root.enabled_index 1)~}}
+{{/if~}}
+{{/each}}
+  if (HAL_PLAY_INPUT_SetConfig(&h{{@root.current_resource}}, in_config, {{@root.in_config_enabled_count}}U) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{assign "lut_config_enabled_count" 0~}}
+{{#each basic.lut_config as |config|~}}
+  {{#if config.enable~}}
+    {{assign "lut_config_enabled_count" (add @root.lut_config_enabled_count 1)~}}
+  {{/if~}}
+{{/each}}
+{{#if (gt @root.lut_config_enabled_count 0)}}
+  /* PLAY LUT configuration */
+  hal_play_lut_config_t lut_config[{{@root.lut_config_enabled_count}}];
+
+{{assign "enabled_index" 0~}}
+{{#each basic.lut_config as |config|~}}
+{{#if config.enable}}
+  /* LUT{{@index}} configuration */
+  lut_config[{{@root.enabled_index}}].lut             = HAL_PLAY_LUT{{@index}};
+  lut_config[{{@root.enabled_index}}].truth_table     = 0x{{#if config.truth_table}}{{uppercase (dec2hex config.truth_table)}}{{else}}00{{/if}};{{#unless (eq config.truth_table_expr "")}} /* Logical expression: {{{config.truth_table_expr}}} */{{/unless}}
+{{#if (eq config.clk_gate_source "FILTER")}}
+  lut_config[{{@root.enabled_index}}].clk_gate_source = HAL_PLAY_LUT_CLK_GATE_FILTER{{config.clk_gate_filter_id}};
+{{else if (eq config.clk_gate_source "REGISTERED")}}
+  lut_config[{{@root.enabled_index}}].clk_gate_source = HAL_PLAY_LUT_CLK_GATE_LUT{{config.clk_gate_lut}}_OUT_REGISTERED;
+{{else if (eq config.clk_gate_source "SWTRIG")}}
+  lut_config[{{@root.enabled_index}}].clk_gate_source = HAL_PLAY_LUT_CLK_GATE_SWTRIG{{config.clk_gate_swtrig_id}};
+{{else}}
+  lut_config[{{@root.enabled_index}}].clk_gate_source = HAL_PLAY_LUT_CLK_GATE_{{config.clk_gate_source}};
+{{/if}}
+
+{{#if config.lut_input_0.enable~}}
+{{#if (eq config.lut_input_0.in0_lut_input "FILTER")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT0] = HAL_PLAY_LUT_INPUT_FILTER{{config.lut_input_0.in0_filter_id}}; /* A */
+{{else if (eq config.lut_input_0.in0_lut_input "DIRECT")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT0] = HAL_PLAY_LUT_INPUT_LUT{{config.lut_input_0.in0_lut}}_OUT_DIRECT; /* A */
+{{else if (eq config.lut_input_0.in0_lut_input "REGISTERED")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT0] = HAL_PLAY_LUT_INPUT_LUT{{config.lut_input_0.in0_lut}}_OUT_REGISTERED; /* A */
+{{else if (eq config.lut_input_0.in0_lut_input "SWTRIG")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT0] = HAL_PLAY_LUT_INPUT_SWTRIG{{config.lut_input_0.in0_swtrig_id}}; /* A */
+{{/if~}}
+{{~else}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT0] = HAL_PLAY_LUT_INPUT_DEFAULT; /* A - unused: input is SW trigger 15 */
+{{/if~}}
+{{#if config.lut_input_1.enable~}}
+{{#if (eq config.lut_input_1.in1_lut_input "FILTER")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT1] = HAL_PLAY_LUT_INPUT_FILTER{{config.lut_input_1.in1_filter_id}}; /* B */
+{{else if (eq config.lut_input_1.in1_lut_input "DIRECT")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT1] = HAL_PLAY_LUT_INPUT_LUT{{config.lut_input_1.in1_lut}}_OUT_DIRECT; /* B */
+{{else if (eq config.lut_input_1.in1_lut_input "REGISTERED")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT1] = HAL_PLAY_LUT_INPUT_LUT{{config.lut_input_1.in1_lut}}_OUT_REGISTERED; /* B */
+{{else if (eq config.lut_input_1.in1_lut_input "SWTRIG")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT1] = HAL_PLAY_LUT_INPUT_SWTRIG{{config.lut_input_1.in1_swtrig_id}}; /* B */
+{{/if~}}
+{{~else}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT1] = HAL_PLAY_LUT_INPUT_DEFAULT; /* B - unused: input is SW trigger 15 */
+{{/if~}}
+{{#if config.lut_input_2.enable~}}
+{{#if (eq config.lut_input_2.in2_lut_input "FILTER")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT2] = HAL_PLAY_LUT_INPUT_FILTER{{config.lut_input_2.in2_filter_id}}; /* C */
+{{else if (eq config.lut_input_2.in2_lut_input "DIRECT")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT2] = HAL_PLAY_LUT_INPUT_LUT{{config.lut_input_2.in2_lut}}_OUT_DIRECT; /* C */
+{{else if (eq config.lut_input_2.in2_lut_input "REGISTERED")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT2] = HAL_PLAY_LUT_INPUT_LUT{{config.lut_input_2.in2_lut}}_OUT_REGISTERED; /* C */
+{{else if (eq config.lut_input_2.in2_lut_input "SWTRIG")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT2] = HAL_PLAY_LUT_INPUT_SWTRIG{{config.lut_input_2.in2_swtrig_id}}; /* C */
+{{/if~}}
+{{~else}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT2] = HAL_PLAY_LUT_INPUT_DEFAULT; /* C - unused: input is SW trigger 15 */
+{{/if~}}
+{{#if config.lut_input_3.enable~}}
+{{#if (eq config.lut_input_3.in3_lut_input "FILTER")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT3] = HAL_PLAY_LUT_INPUT_FILTER{{config.lut_input_3.in3_filter_id}}; /* D */
+{{else if (eq config.lut_input_3.in3_lut_input "DIRECT")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT3] = HAL_PLAY_LUT_INPUT_LUT{{config.lut_input_3.in3_lut}}_OUT_DIRECT; /* D */
+{{else if (eq config.lut_input_3.in3_lut_input "REGISTERED")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT3] = HAL_PLAY_LUT_INPUT_LUT{{config.lut_input_3.in3_lut}}_OUT_REGISTERED; /* D */
+{{else if (eq config.lut_input_3.in3_lut_input "SWTRIG")}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT3] = HAL_PLAY_LUT_INPUT_SWTRIG{{config.lut_input_3.in3_swtrig_id}}; /* D */
+{{/if~}}
+{{~else}}
+  lut_config[{{@root.enabled_index}}].input_source[HAL_PLAY_LUT_INPUT3] = HAL_PLAY_LUT_INPUT_DEFAULT; /* D - unused: input is SW trigger 15 */
+{{/if}}
+
+{{assign "enabled_index" (add @root.enabled_index 1)~}}
+{{/if~}}
+{{/each}}
+  if (HAL_PLAY_LUT_SetConfig(&h{{@root.current_resource}}, lut_config, {{@root.lut_config_enabled_count}}U) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+{{assign "out_config_enabled_count" 0~}}
+{{#each basic.out_config as |config|~}}
+  {{#if config.enable~}}
+    {{assign "out_config_enabled_count" (add @root.out_config_enabled_count 1)~}}
+  {{/if~}}
+{{/each}}
+{{#if (gt @root.out_config_enabled_count 0)}}
+  /* PLAY output configuration */
+  hal_play_out_config_t out_config[{{@root.out_config_enabled_count}}];
+
+{{assign "enabled_index" 0~}}
+{{#each basic.out_config as |config|~}}
+{{#if config.enable}}
+{{#if config.user_label}}
+  /* Output: {{config.user_label}} */
+{{/if}}
+  /* Connect LUT{{config.lut_output}} {{#if (eq config.output_type "REGISTERED")}}(registered output){{else}}(direct output){{/if}} to PLAY output {{@index}} */
+  out_config[{{@root.enabled_index}}].output_mux = HAL_PLAY_OUT{{@index}};
+  out_config[{{@root.enabled_index}}].lut_output = HAL_PLAY_LUT{{config.lut_output}}{{#if (eq config.output_type "REGISTERED")}}_OUT_REGISTERED{{else}}_OUT_DIRECT{{/if}};
+
+{{assign "enabled_index" (add @root.enabled_index 1)~}}
+{{/if~}}
+{{/each}}
+  if (HAL_PLAY_OUTPUT_SetConfig(&h{{@root.current_resource}}, out_config, {{@root.out_config_enabled_count}}U) != HAL_OK)
+  {
+    return NULL;
+  }
+
+{{/if}}
+
+{{> GPIO_HAL fct='init_resource' resource=@root.current_resource return_if_failed='NULL' init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+
+{{#if system.exti.enable}}
+{{> EXTI fct='exti_get_init' layer=@root.current_layer needs=system.exti.exti_config.needs found_exti=@root.found_exti~}}
+{{assign 'found_exti' true~}}
+{{/if}}
+{{#if system.nvic.enable}}
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context system.nvic.nvic_config.needs @root.current_resource system.nvic.irq_handler_generation)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=system.nvic.nvic_config.needs}}
+
+{{/if}}
+  return &h{{@root.current_resource}};
+}
+
+void {{@root.fct_name}}_deinit(void)
+{
+{{#if system.nvic.enable}}
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=system.nvic.nvic_config.needs}}
+
+{{/if}}
+  HAL_PLAY_DeInit(&h{{@root.current_resource}});
+
+{{> RCC fct='generate_peripheral_clock_deactivation' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_peripheral_clock_reset' hw_resource= @root.current_resource}}
+
+{{> GPIO_HAL fct='deinit_resource' resource=@root.current_resource}}
+
+{{#if system.exti.enable}}
+{{> EXTI fct='exti_get_deinit' layer=@root.layer needs=system.exti.exti_config.needs~}}
+{{/if}}
+}
+
+{{else}}
+{{!
+    Generation of initialization function used in LL
+~}}
+PLAY_TypeDef *{{@root.fct_name}}_init(void)
+{
+{{> RCC fct='generate_peripheral_clock_activation' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_kernel_clock' hw_resource=@root.current_resource sw_resource='PLAY'}}
+
+{{assign "in_config_enabled_count" 0~}}
+{{#each basic.in_config as |config|~}}
+  {{#if config.enable~}}
+    {{assign "in_config_enabled_count" (add @root.in_config_enabled_count 1)~}}
+  {{/if~}}
+{{/each}}
+{{#if (gt @root.in_config_enabled_count 0)}}
+  /************** PLAY input configuration **************/
+
+{{#each basic.in_config as |config|~}}
+{{~#if config.enable~}}
+{{~#if config.user_label}}  /* Input: {{config.user_label}} */{{/if~}}
+  {{~assign 'input_mux_value' (concat 'LL_PLAY_IN' @index)~}}
+  {{~assign 'premuxsel_value' (concat (helper_play_get_premuxsel_from_id config.input_src.id) 'U')~}}
+  {{~assign 'edge_detection_mode' (concat 'LL_PLAY_EDGE_DETECTION_MODE_' config.mode)~}}
+  {{~assign 'min_pulse_width_value' (concat config.min_pulse_width 'U')}}
+  {{helper_common_gen_ll_code 'LL_PLAY_INPUT_Config' @root.input_mux_value @root.premuxsel_value @root.edge_detection_mode @root.min_pulse_width_value}}
+
+{{/if~}}
+{{/each}}
+{{/if}}
+{{assign "lut_config_enabled_count" 0~}}
+{{#each basic.lut_config as |config|~}}
+  {{#if config.enable~}}
+    {{assign "lut_config_enabled_count" (add @root.lut_config_enabled_count 1)~}}
+  {{/if~}}
+{{/each}}
+{{#if (gt @root.lut_config_enabled_count 0)}}
+  /************** PLAY LUT configuration **************/
+
+{{#each basic.lut_config as |config|~}}
+{{~#if config.enable}}
+  /* LUT{{@index}} configuration */
+{{#unless (eq config.truth_table_expr "")}}  /* Logical expression: {{{config.truth_table_expr}}} */{{/unless}}
+  {{~assign 'lut' (concat 'LL_PLAY_LUT' @index)~}}
+  {{~#if config.truth_table~}}
+    {{~assign 'truth_table' (concat '0x' (uppercase (dec2hex config.truth_table)))~}}
+  {{~else~}}
+    {{~assign 'truth_table' '0x00'~}}
+  {{~/if}}
+
+  {{helper_common_gen_ll_code 'LL_PLAY_LUT_SetTruthTable' @root.lut @root.truth_table}}
+{{#if (or (not config.lut_input_0.enable) (not config.lut_input_1.enable) (not config.lut_input_2.enable) (not config.lut_input_3.enable))}}
+  /* Unused inputs are connected to SW trigger 15 */
+{{/if}}
+{{#if config.lut_input_0.enable~}}
+  {{~#if (eq config.lut_input_0.in0_lut_input "FILTER")~}}
+    {{~assign 'in0_source' (concat 'LL_PLAY_LUT_SOURCE_FILTER' config.lut_input_0.in0_filter_id)~}}
+  {{~else if (eq config.lut_input_0.in0_lut_input "DIRECT")~}}
+    {{~assign 'in0_source' (concat 'LL_PLAY_LUT_SOURCE_LUT' config.lut_input_0.in0_lut '_OUT_DIRECT')~}}
+  {{~else if (eq config.lut_input_0.in0_lut_input "REGISTERED")~}}
+    {{~assign 'in0_source' (concat 'LL_PLAY_LUT_SOURCE_LUT' config.lut_input_0.in0_lut '_OUT_REGISTERED')~}}
+  {{~else if (eq config.lut_input_0.in0_lut_input "SWTRIG")~}}
+    {{~assign 'in0_source' (concat 'LL_PLAY_LUT_SOURCE_SWTRIG' config.lut_input_0.in0_swtrig_id)~}}
+  {{~/if~}}
+{{~else~}}
+  {{~assign 'in0_source' 'LL_PLAY_LUT_SOURCE_SWTRIG15'~}}
+{{/if~}}
+{{#if config.lut_input_1.enable~}}
+  {{~#if (eq config.lut_input_1.in1_lut_input "FILTER")~}}
+    {{~assign 'in1_source' (concat 'LL_PLAY_LUT_SOURCE_FILTER' config.lut_input_1.in1_filter_id)~}}
+  {{~else if (eq config.lut_input_1.in1_lut_input "DIRECT")~}}
+    {{~assign 'in1_source' (concat 'LL_PLAY_LUT_SOURCE_LUT' config.lut_input_1.in1_lut '_OUT_DIRECT')~}}
+  {{~else if (eq config.lut_input_1.in1_lut_input "REGISTERED")~}}
+    {{~assign 'in1_source' (concat 'LL_PLAY_LUT_SOURCE_LUT' config.lut_input_1.in1_lut '_OUT_REGISTERED')~}}
+  {{~else if (eq config.lut_input_1.in1_lut_input "SWTRIG")~}}
+    {{~assign 'in1_source' (concat 'LL_PLAY_LUT_SOURCE_SWTRIG' config.lut_input_1.in1_swtrig_id)~}}
+  {{~/if~}}
+{{~else~}}
+  {{~assign 'in1_source' 'LL_PLAY_LUT_SOURCE_SWTRIG15'~}}
+{{/if~}}
+{{#if config.lut_input_2.enable~}}
+  {{~#if (eq config.lut_input_2.in2_lut_input "FILTER")~}}
+    {{~assign 'in2_source' (concat 'LL_PLAY_LUT_SOURCE_FILTER' config.lut_input_2.in2_filter_id)~}}
+  {{~else if (eq config.lut_input_2.in2_lut_input "DIRECT")~}}
+    {{~assign 'in2_source' (concat 'LL_PLAY_LUT_SOURCE_LUT' config.lut_input_2.in2_lut '_OUT_DIRECT')~}}
+  {{~else if (eq config.lut_input_2.in2_lut_input "REGISTERED")~}}
+    {{~assign 'in2_source' (concat 'LL_PLAY_LUT_SOURCE_LUT' config.lut_input_2.in2_lut '_OUT_REGISTERED')~}}
+  {{~else if (eq config.lut_input_2.in2_lut_input "SWTRIG")~}}
+    {{~assign 'in2_source' (concat 'LL_PLAY_LUT_SOURCE_SWTRIG' config.lut_input_2.in2_swtrig_id)~}}
+  {{~/if~}}
+{{~else~}}
+  {{~assign 'in2_source' 'LL_PLAY_LUT_SOURCE_SWTRIG15'~}}
+{{/if~}}
+{{~#if config.lut_input_3.enable~}}
+  {{~#if (eq config.lut_input_3.in3_lut_input "FILTER")~}}
+    {{~assign 'in3_source' (concat 'LL_PLAY_LUT_SOURCE_FILTER' config.lut_input_3.in3_filter_id)~}}
+  {{~else if (eq config.lut_input_3.in3_lut_input "DIRECT")~}}
+    {{~assign 'in3_source' (concat 'LL_PLAY_LUT_SOURCE_LUT' config.lut_input_3.in3_lut '_OUT_DIRECT')~}}
+  {{~else if (eq config.lut_input_3.in3_lut_input "REGISTERED")~}}
+    {{~assign 'in3_source' (concat 'LL_PLAY_LUT_SOURCE_LUT' config.lut_input_3.in3_lut '_OUT_REGISTERED')~}}
+  {{~else if (eq config.lut_input_3.in3_lut_input "SWTRIG")~}}
+    {{~assign 'in3_source' (concat 'LL_PLAY_LUT_SOURCE_SWTRIG' config.lut_input_3.in3_swtrig_id)~}}
+  {{~/if~}}
+{{~else~}}
+  {{~assign 'in3_source' 'LL_PLAY_LUT_SOURCE_SWTRIG15'~}}
+{{/if~}}
+{{~#if (eq config.clk_gate_source "FILTER")~}}
+  {{~assign 'clk_gate_source' (concat 'LL_PLAY_LUT_CLK_GATE_FILTER' config.clk_gate_filter_id)~}}
+{{~else if (eq config.clk_gate_source "REGISTERED")~}}
+  {{~assign 'clk_gate_source' (concat 'LL_PLAY_LUT_CLK_GATE_LUT' config.clk_gate_lut '_OUT_REGISTERED')~}}
+{{~else if (eq config.clk_gate_source "SWTRIG")~}}
+  {{~assign 'clk_gate_source' (concat 'LL_PLAY_LUT_CLK_GATE_SWTRIG' config.clk_gate_swtrig_id)~}}
+{{~else~}}
+  {{~assign 'clk_gate_source' (concat 'LL_PLAY_LUT_CLK_GATE_' config.clk_gate_source)~}}
+{{~/if}}
+  {{helper_common_gen_ll_code 'LL_PLAY_LUT_ConfigInputs' @root.lut @root.in0_source @root.in1_source @root.in2_source @root.in3_source @root.clk_gate_source}}
+
+{{/if~}}
+{{/each}}
+{{/if}}
+{{assign "out_config_enabled_count" 0~}}
+{{#each basic.out_config as |config|~}}
+  {{#if config.enable~}}
+    {{assign "out_config_enabled_count" (add @root.out_config_enabled_count 1)~}}
+  {{/if~}}
+{{/each}}
+{{#if (gt @root.out_config_enabled_count 0)}}
+  /************** PLAY output configuration **************/
+
+{{#each basic.out_config as |config|~}}
+{{#if config.enable}}
+{{#if config.user_label}}
+  /* Output: {{config.user_label}} */
+{{/if}}
+  /* Connect LUT{{config.lut_output}} {{#if (eq config.output_type "REGISTERED")}}(registered output){{else}}(direct output){{/if}} to PLAY output {{@index}} */
+  {{~assign 'output_mux' (concat 'LL_PLAY_OUT' @index)~}}
+  {{~#if (eq config.output_type "REGISTERED")~}}
+    {{~assign 'source' (concat 'LL_PLAY_LUT' config.lut_output '_OUT_REGISTERED')~}}
+  {{~else~}}
+    {{~assign 'source' (concat 'LL_PLAY_LUT' config.lut_output '_OUT_DIRECT')~}}
+  {{~/if}}
+
+  {{helper_common_gen_ll_code 'LL_PLAY_OUTPUT_SetSource' @root.output_mux @root.source}}
+
+{{/if~}}
+{{/each}}
+{{/if}}
+
+{{> GPIO_LL fct='init_resource' resource=@root.current_resource return_if_failed='0' init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+
+{{#if system.exti.enable}}
+{{> EXTI fct='exti_get_init' layer=@root.current_layer needs=system.exti.exti_config.needs found_exti=@root.found_exti~}}
+{{assign 'found_exti' true~}}
+{{/if}}
+{{#if system.nvic.enable}}
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context @root.nvic_context system.nvic.nvic_config.needs @root.current_resource system.nvic.irq_handler_generation)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=system.nvic.nvic_config.needs}}
+
+{{/if}}
+  return {{@root.current_resource}};
+}
+
+void {{@root.fct_name}}_deinit(void)
+{
+{{#if system.nvic.enable}}
+{{> CORTEX fct='deinit' layer=@root.current_layer needs=system.nvic.nvic_config.needs}}
+
+{{/if}}
+{{> RCC fct='generate_peripheral_clock_deactivation' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_peripheral_clock_reset' hw_resource= @root.current_resource}}
+
+{{> GPIO_LL fct='deinit_resource' resource=@root.current_resource}}
+
+{{#if system.exti.enable}}
+{{> EXTI fct='exti_get_deinit' layer=@root.layer needs=system.exti.exti_config.needs~}}
+{{/if}}
+}
+
+{{/if}}
+  {{#if (eq @root.current_layer 'HAL')}}
+    {{#unless @root.hal_handle_exist}}
+      {{~assign 'fct_name' (helper_common_get_generated_function_name @root.current_resource @root.current_layer undefined)~}}
+{{!
+    Generation of getHandle functions used in HAL
+~}}
+hal_play_handle_t *{{@root.fct_name}}_gethandle(void)
+{
+  return &h{{@root.current_resource}};
+}
+
+{{> GPIO_HAL fct='gpio_exti_gethandle' resource=@root.current_resource type='implementation'}}
+{{#if system.exti.enable}}
+{{> EXTI fct='exti_gethandle' needs=system.exti.exti_config.needs~}}
+
+{{/if}}
+      {{~assign 'hal_handle_exist' true}}
+
+    {{/unless}}
+  {{/if}}
+{{/with}}
+
+{{#if (eq @root.current_layer 'HAL')}}
+{{> GPIO_HAL fct='init_resource_independently' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+{{else}}
+{{> GPIO_LL fct='init_resource_independently' resource=@root.current_resource init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name type='implementation'}}
+{{/if}}
+{{/each}}
+
+{{assign 'irq_info_list' (helper_cortex_nvic_get_irqline_info_list @root.NvicAPI @root.nvic_context 'PLAY')~}}
+{{#each @root.irq_info_list}}
+{{#if generate_handler}}
+/******************************************************************************/
+/*                     {{description}}                    */
+/******************************************************************************/
+void {{line}}_IRQHandler(void)
+{
+  HAL_{{component}}_IRQHandler(&h{{line}});
+{{#if (and (eq component 'PLAY') @root.play_cxt.system.exti.enable)}}
+
+  HAL_EXTI_IRQHandler(&h{{@root.get_exti_cfg_config_object.resourceId}});
+{{/if}}
+}
+{{else}}
+/******************************************************************************/
+/*    {{description}} is managed directly in user code.   */
+/*
+void {{line}}_IRQHandler(void)
+{
+}
+  */
+/******************************************************************************/
+{{/if}}
+
+{{/each}}
+{{/helper_common_beautifier}}

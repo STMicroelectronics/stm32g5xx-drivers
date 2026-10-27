@@ -1,0 +1,54 @@
+{{!
+ * @file Partial used to generate code for POSENC:
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+~}}
+{{#if (eq fct 'init')}}
+  /****************************************************************************/
+  /* Initialization of POSENC instance                                        */
+  /****************************************************************************/
+{{#with basic}}
+{{#if (eq protocol 'NONE')}}
+  // No POSENC encoder mode selected
+{{else}}
+{{#if strobe_resync}}
+  {{assign 'resync'  'ENABLED'~}}
+{{else}}
+  {{assign 'resync'  'DISABLED'~}}
+{{/if}}
+
+  {{helper_common_gen_ll_code 'LL_POSENC_ConfigEncoder' (concat 'LL_POSENC_STROBE_RESYNC_' @root.resync) (concat 'LL_POSENC_ENCSEL_' protocol) (concat 'LL_POSENC_STROBE_' (helper_posenc_rename_trigger trigger.source))}}
+
+{{/if}}
+{{/with}}
+{{#if (eq basic.protocol 'HIPERFACEDSL') }}
+{{#with additional}}
+{{#with hiperfacedsl}}
+  /****************************************************************************/
+  /* Initialization of HiperfaceDSL feature                                   */
+  /****************************************************************************/
+
+{{#with event_driven}}
+  {{helper_common_gen_ll_code 'LL_POSENC_HD_SetEventDrivenFastPosition' (concat 'LL_POSENC_HD_EVTDRV_FASTPOSITION_' fast_position)}}
+{{#if velocity}}
+  {{helper_common_gen_ll_code 'LL_POSENC_HD_EnableEventDrivenVelocity'}}
+{{/if}}
+  {{helper_common_gen_ll_code 'LL_POSENC_HD_SetEventDrivenSafePosition_1' (concat 'LL_POSENC_HD_EVTDRV_SAFE_POSITION_1_' safe_position_1)}}
+{{#if safe_crc}}
+  {{helper_common_gen_ll_code 'LL_POSENC_HD_EnableEventDrivenSafePosition_1_CRC'}}
+{{/if}}
+{{/with}}
+{{/with}}
+{{/with}}
+{{/if}}
+{{else if (eq fct 'deinit')}}
+{{else}}
+#warning "step {{fct}} in partial POSENC_LL not managed"
+{{/if}}

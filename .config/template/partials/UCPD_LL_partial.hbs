@@ -1,0 +1,106 @@
+{{!
+ * @file Partial used to generate code for UCPD:
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+~}}
+{{!
+  Partial used for LL UCPD:
+  how to use
+  > UCPD_LL fct='xxxx' with xxxx:
+    * exported_functions_init
+~}}
+{{#if (eq fct 'exported_functions_init')}}
+{{> DMA_LL fct='get_dma_lli_variables' resource=@root.dma_resource strategy=@root.strategy}}
+
+UCPD_TypeDef *{{@root.fct_name}}_init(void)
+{
+
+  /* Basic configuration */
+{{> RCC fct='generate_peripheral_clock_activation' hw_resource=@root.current_resource~}}
+{{> RCC fct='generate_kernel_clock' hw_resource=@root.current_resource sw_resource='UCPD'}}
+{{#with basic}}
+  /* Bit rate set to {{timing.bit_rate}} */
+  {{helper_common_gen_ll_code 'LL_UCPD_SetPSCClk'(concat 'LL_UCPD_PSC_DIV' timing.clock_prescaler)}}
+  {{helper_common_gen_ll_code 'LL_UCPD_SetHbitClockDiv'(concat 'LL_UCPD_HBITCLK_DIV' timing.half_bit_clock)}}
+  LL_UCPD_SetTransWin({{@root.current_resource}}, LL_UCPD_TRANSWIN_DIV{{timing.transition_window}});
+  LL_UCPD_SetIfrGap({{@root.current_resource}}, LL_UCPD_IFRGAP_DIV{{timing.inter_frame_gap_timer_clock}});
+{{/with~}}{{!basic}}
+  {{assign 'rx_ordered_set_config' (helper_ucpd_rx_ordered_set_multiline basic.rx_ordered_set "LL")}}
+  {{helper_common_gen_ll_code 'LL_UCPD_SetRxOrderSet' @root.rx_ordered_set_config}}
+
+{{#with additional}}
+{{#if rx_analog_filter}}
+  LL_UCPD_EnableRxAnalogFilter({{@root.current_resource}});
+{{/if~}}{{!rx_analog_filter}}
+{{#if wake_up_stop_mode}}
+  LL_UCPD_EnableWakeUp({{@root.current_resource}});
+{{/if~}}{{!wake_up_stop_mode}}
+
+{{#if force_clock}}
+  LL_UCPD_EnableForceClock({{@root.current_resource}});
+{{/if~}}{{!force_clock}}
+
+{{#if rx_prefilter}}
+  LL_UCPD_EnableRxPreFilter({{@root.current_resource}});
+
+  {{helper_common_gen_ll_code 'LL_UCPD_SetRxPreFilterSampling'(concat 'LL_UCPD_RX_PREFILTER_' rx_prefilter_sampling)}}
+{{/if~}}{{!rx_prefilter}}
+{{/with~}}{{!additional}}
+  LL_UCPD_Enable({{@root.current_resource}});
+{{> GPIO_LL fct='init_resource' resource=@root.current_resource return_if_failed='NULL' init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name~}}
+{{#with system}}
+{{#with nvic}}
+{{#if enable_interruption}}
+  /* Enable interrupt */
+{{assign 'nvic_context' (helper_cortex_nvic_concatenate_irq_context  @root.nvic_context nvic_config.needs @root.current_resource irq_handler_generation)~}}
+{{> CORTEX fct='init' layer=@root.current_layer needs=nvic_config.needs}}
+{{/if~}}
+{{/with}}{{! nvic~}}
+{{#with dma}}
+{{#if enable_dma_tx}}
+{{> DMA_LL fct='init' needs=dma_config_tx.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if~}}
+{{#if enable_dma_rx}}
+{{> DMA_LL fct='init' needs=dma_config_rx.needs init_model=@root.codegen_ctxt.init_model fct_name=@root.fct_name}}
+{{/if}}
+{{/with}}{{! dma~}}
+{{/with}}{{! system~}}
+  return {{@root.current_resource}};
+}
+
+void {{@root.fct_name}}_deinit(void)
+{
+{{> RCC fct='generate_peripheral_clock_reset' hw_resource=@root.current_resource}}
+{{> RCC fct='generate_peripheral_clock_deactivation' hw_resource=@root.current_resource}}
+{{> GPIO_LL fct='deinit_resource' resource=@root.current_resource~}}
+{{#with system}}
+{{#with nvic}}
+{{#if enable_interruption}}
+  /* Disable interrupt */
+{{> CORTEX fct='deinit' layer=@root.current_layer}}
+{{/if}}
+{{/with}}{{! nvic~}}
+  LL_UCPD_Disable({{@root.current_resource}});
+
+{{#with dma}}
+{{#if enable_dma_tx}}
+{{> DMA_LL fct='deinit' needs=dma_config_tx.needs~}}
+{{/if~}}
+{{#if enable_dma_rx}}
+{{> DMA_LL fct='deinit' needs=dma_config_rx.needs~}}
+{{/if~}}
+{{/with}}{{! dma~}}
+{{/with}}{{! system~}}
+}
+{{> DMA_LL fct='get_dma_lli_reg' resource=@root.dma_resource strategy=@root.strategy type='implementation'}}
+
+{{else}}
+#warning "step {{step}} in partial UCPD_LL not managed"
+{{/if}}

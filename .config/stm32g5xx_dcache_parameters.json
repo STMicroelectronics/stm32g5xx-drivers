@@ -1,0 +1,258 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "version": "0.0.1",
+  "componentid": "::Device:STM32CubeMX2 Config:DCACHE",
+  "grammarVersion": "3.8",
+  "type": "object",
+  "properties": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "info": {
+          "title": "General information",
+          "type": "object",
+          "properties": {
+            "labels": {
+              "type": "array",
+              "title": "Add a label",
+              "description": "Labels allow to create aliases inside mx_hal_def.h file like '<label>_init', '<label>_deinit' and '<label>_gethandle'. These aliases can be used on application side.",
+              "items": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 32,
+                "unique": "project",
+                "default": "",
+                "actions": [
+                  {
+                    "type": "error",
+                    "condition": "!/^[A-Za-z_][A-Za-z0-9_]*$/.test($value)",
+                    "message": "Name must be a valid C identifier: start with a letter or underscore, and contain only letters, digits, or underscores."
+                  }
+                ]
+              }
+            },
+            "layer": {
+              "title": "Software layer",
+              "type": "string",
+              "oneOf": [
+                {
+                  "const": "HAL",
+                  "title": "HAL"
+                },
+                {
+                  "const": "LL",
+                  "title": "LL"
+                }
+              ],
+              "default": "HAL",
+              "variables": [
+                {
+                  "on": "update-value",
+                  "name": "HAL_DCACHE_PROJECT_USE_HAL",
+                  "condition": "$value === 'HAL'",
+                  "semaphore": true
+                }
+              ]
+            },
+            "init_type": {
+              "title": "Resource initialization code generation",
+              "type": "string",
+              "description": "Pick whether the initialization code should be generated and automatically called at startup.",
+              "oneOf": [
+                {
+                  "title": "Callable",
+                  "const": "called",
+                  "description": "Initialization code is generated and called in peripheral initialization."
+                },
+                {
+                  "title": "Generated",
+                  "const": "enabled",
+                  "description": "Initialization code is generated but not called in peripheral initialization."
+                },
+                {
+                  "title": "Not generated",
+                  "const": "disabled",
+                  "description": "Initialization code is not generated."
+                }
+              ],
+              "default": "called"
+            }
+          }
+        },
+        "basic": {
+          "title": "Main features",
+          "type": "object",
+          "properties": {
+            "read_burst_type": {
+              "title": "Read burst type",
+              "type": "string",
+              "description": "The configuration of the DCACHE is the Read Burst Type: output burst type for cache master port read accesses.\nThere are two possible Read Burst Types: WRAP or INCR.\nThe default value of Read Burst Type is WRAP because it minimizes the latency of the data explicitly requested by the processor.",
+              "oneOf": [
+                {
+                  "title": "WRAP mode",
+                  "const": "WRAP"
+                },
+                {
+                  "title": "INCR (increment) mode",
+                  "const": "INCR"
+                }
+              ],
+              "default": "WRAP"
+            }
+          }
+        },
+        "additional": {
+          "title": "Advanced features",
+          "type": "object",
+          "properties": {
+            "enable_ecc": {
+              "title": "Error-correcting code",
+              "type": "boolean",
+              "description": "DCACHE will use the implemented error-correcting code (ECC) feature with a single-bit and double-bit error detection.\nElse, the DCACHE behaves as if the ECC feature is not implemented (related error flags remain clear).",
+              "actions": [
+                {
+                  "type": "include",
+                  "condition": "$resource.features.ECC"
+                }
+              ],
+              "default": false
+            },
+            "single_ecc_error": {
+              "title": "Single ECC error",
+              "type": "boolean",
+              "description": "Interrupt enable on ECC single-bit error detection.",
+              "default": false,
+              "actions": [
+                {
+                  "type": "include",
+                  "condition": "$resource.features.Ecc"
+                },
+                {
+                  "type": "enable",
+                  "condition": "$additional.enable_ecc",
+                  "message": "Need to enable ECC"
+                },
+                {
+                  "type": "set",
+                  "condition": "!($additional.enable_ecc)",
+                  "computed": {
+                    "const": false
+                  }
+                }
+              ]
+            },
+            "double_ecc_error": {
+              "title": "Double ECC error",
+              "type": "boolean",
+              "description": "Interrupt enable on ECC double-bit error detection.",
+              "default": false,
+              "actions": [
+                {
+                  "type": "include",
+                  "condition": "$resource.features.Ecc"
+                },
+                {
+                  "type": "enable",
+                  "condition": "$additional.enable_ecc",
+                  "message": "Need to enable ECC"
+                },
+                {
+                  "type": "set",
+                  "condition": "!($additional.enable_ecc)",
+                  "computed": {
+                    "const": false
+                  }
+                }
+              ]
+            },
+            "monitors": {
+              "title": "Monitors",
+              "type": "object",
+              "description": "DCACHE monitors configuration.",
+              "properties": {
+                "read_hit_monitor": {
+                  "title": "Read hit monitor",
+                  "type": "boolean",
+                  "description": "The two 32-bit read-hit count the AHB transactions at the DCACHE input (slave port) that do not generate a transaction on the DCACHE output (master port).",
+                  "default": false
+                },
+                "write_hit_monitor": {
+                  "title": "Write hit monitor",
+                  "type": "boolean",
+                  "description": "The two 32-bit write-hit count the AHB transactions at the DCACHE input (slave port) that do not generate a transaction on the DCACHE output (master port).",
+                  "default": false
+                },
+                "read_miss_monitor": {
+                  "title": "Read miss monitor",
+                  "type": "boolean",
+                  "description": "The two 16-bit read-miss count the AHB transactions at the DCACHE input (slave port) that do not generate a transaction on the DCACHE output (master port).",
+                  "default": false
+                },
+                "write_miss_monitor": {
+                  "title": "Write miss monitor",
+                  "type": "boolean",
+                  "description": "The two 16-bit write-miss count the AHB transactions at the DCACHE input (slave port) that do not generate a transaction on the DCACHE output (master port).",
+                  "default": false
+                }
+              }
+            }
+          }
+        },
+        "system": {
+          "type": "object",
+          "title": "System",
+          "description": "DCACHE Global Configuration Structure definition.",
+          "properties": {
+            "nvic": {
+              "title": "NVIC",
+              "type": "object",
+              "properties": {
+                "enable_interruption": {
+                  "title": "Interrupt",
+                  "type": "boolean",
+                  "default": false
+                },
+                "irq_handler_generation": {
+                  "title": "IRQ handler generation",
+                  "type": "boolean",
+                  "default": true,
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$system.nvic.enable_interruption && $info.layer === 'HAL'"
+                    }
+                  ]
+                },
+                "irq_config1": {
+                  "title": "IRQ line priority",
+                  "type": "object",
+                  "objectType": "need.interrupt.lines",
+                  "variables": [
+                    {
+                      "on": "update-value",
+                      "name": "HAL_CORTEX_PROJECT_USE_HAL",
+                      "condition": "$info.layer === 'HAL'",
+                      "semaphore": true
+                    }
+                  ],
+                  "owner": "$resource.id",
+                  "needs": [
+                    {
+                      "selector": "*"
+                    }
+                  ],
+                  "actions": [
+                    {
+                      "type": "include",
+                      "condition": "$system.nvic.enable_interruption"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
